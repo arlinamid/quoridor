@@ -208,11 +208,16 @@ export default function App() {
       })
       .on('presence', { event: 'leave' }, async ({ key, leftPresences }) => {
         if (key !== session.user.id) {
-          // Opponent left
-          if (viewRef.current === 'game' && !showWinRef.current && !gameStateRef.current.gameOver) {
-            updateGameState(onlineGameId, { ...gameStateRef.current, gameOver: true }, 'finished', session.user.id);
-            handleWin(onlineRole, false, 'Ellenfél kilépett!');
-          }
+          // Opponent left - wait a bit to see if they reconnect (e.g. React Strict Mode remount or brief network drop)
+          setTimeout(() => {
+            const state = channel.presenceState();
+            if (!state[key]) {
+              if (viewRef.current === 'game' && !showWinRef.current && !gameStateRef.current.gameOver) {
+                updateGameState(onlineGameId, { ...gameStateRef.current, gameOver: true }, 'finished', session.user.id);
+                handleWin(onlineRole, false, 'Ellenfél kilépett!');
+              }
+            }
+          }, 3000);
         }
       })
       .subscribe(async (status) => {
