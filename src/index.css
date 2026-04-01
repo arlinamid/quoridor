@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Outfit:wght@300;400;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cinzel", ui-serif, Georgia, serif;
+}
+
+body {
+  background: #0d0704;
+  color: #f5e6d3;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
