@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
 import { QuoridorBoard } from './components/QuoridorBoard';
@@ -88,6 +88,22 @@ export default function App() {
     }
   }, [view, leaderboardTab, isSupabaseConfigured]);
 
+  const gameStateRef = useRef(gameState);
+  const viewRef = useRef(view);
+  const showWinRef = useRef(showWin);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    showWinRef.current = showWin;
+  }, [showWin]);
+
   const loadProfile = async (userId: string) => {
     const dbProfile = await getDbProfile(userId);
     if (dbProfile) {
@@ -116,6 +132,7 @@ export default function App() {
       await supabase.auth.signOut();
     }
     setProfile(getLocalProfile());
+    setShowWin(false);
     setView('auth');
   };
 
@@ -126,14 +143,22 @@ export default function App() {
 
   // Online Multiplayer Sync
   useEffect(() => {
-    if (mode !== 'online' || !onlineGameId || !isSupabaseConfigured) return;
+    if (mode !== 'online' || !onlineGameId || !isSupabaseConfigured || !session) return;
 
-    const channel = supabase.channel(`game-${onlineGameId}`)
+    const channel = supabase.channel(`game-${onlineGameId}`, {
+      config: {
+        presence: {
+          key: session.user.id,
+        },
+      },
+    });
+
+    channel
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${onlineGameId}` }, async (payload) => {
         const newGame = payload.new;
         setGameState(newGame.state);
 
-        if (newGame.status === 'playing' && view === 'lobby') {
+        if (newGame.status === 'playing' && viewRef.current === 'lobby') {
           if (newGame.player2_id) {
             const opp = await getDbProfile(newGame.player2_id);
             if (opp) setOpponent(opp);
@@ -141,28 +166,71 @@ export default function App() {
           setView('game');
         }
 
-        if (newGame.status === 'finished' && !showWin) {
-          const winnerIndex = newGame.winner_id === session?.user.id ? onlineRole : (1 - onlineRole);
+        if (newGame.status === 'finished' && !showWinRef.current) {
+          const winnerIndex = newGame.winner_id === session.user.id ? onlineRole : (1 - onlineRole);
           handleWin(winnerIndex, true);
         }
       })
-      .subscribe();
+      .on('presence', { event: 'leave' }, async ({ key, leftPresences }) => {
+        if (key !== session.user.id) {
+          // Opponent left
+          if (viewRef.current === 'game' && !showWinRef.current && !gameStateRef.current.gameOver) {
+            updateGameState(onlineGameId, { ...gameStateRef.current, gameOver: true }, 'finished', session.user.id);
+            handleWin(onlineRole, false, 'Ellenfél kilépett!');
+          }
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ online_at: new Date().toISOString() });
+        }
+      });
 
     return () => { supabase.removeChannel(channel); };
-  }, [mode, onlineGameId, view, showWin, session, onlineRole]);
+  }, [mode, onlineGameId, session, onlineRole, handleWin]);
 
-  // Fetch waiting games for lobby
+  // Fetch waiting games for lobby and track lobby presence
+  const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
+
   useEffect(() => {
-    if (view === 'lobby' && isSupabaseConfigured) {
+    if (view === 'lobby' && isSupabaseConfigured && session) {
+      const channel = supabase.channel('lobby', {
+        config: {
+          presence: {
+            key: session.user.id,
+          },
+        },
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const users = new Set(Object.keys(state));
+          setLobbyUsers(users);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({ online_at: new Date().toISOString() });
+          }
+        });
+
       const fetchGames = async () => {
         const { data } = await supabase.from('games').select('*, player1:profiles!player1_id(username)').eq('status', 'waiting');
-        if (data) setWaitingGames(data);
+        if (data) {
+          // We will filter games in the render based on lobbyUsers, 
+          // because lobbyUsers might update independently of fetchGames.
+          setWaitingGames(data);
+        }
       };
       fetchGames();
       const interval = setInterval(fetchGames, 5000);
-      return () => clearInterval(interval);
+
+      return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+      };
     }
-  }, [view]);
+  }, [view, session]);
 
   const handleCreateOnlineGame = async () => {
     if (!session) return;
@@ -204,6 +272,9 @@ export default function App() {
   };
 
   const startGame = (selectedMode: GameMode) => {
+    setShowWin(false);
+    setWinReason('');
+    setStatusMsg('');
     if (selectedMode === 'online') {
       setView('lobby');
       setOnlineGameId(null);
@@ -215,17 +286,14 @@ export default function App() {
     setWallMode(false);
     setWallOrient('h');
     setAnimating(false);
-    setShowWin(false);
-    setWinReason('');
-    setStatusMsg('');
     setTimeLeft(120);
     setView('game');
   };
 
-  const handleWin = useCallback((winnerIndex: number, fromRealtime = false, isTimeout = false) => {
+  const handleWin = useCallback((winnerIndex: number, fromRealtime = false, reason = '') => {
     setShowWin(true);
     setGameState(prev => ({ ...prev, gameOver: true }));
-    setWinReason(isTimeout ? 'Időtúllépés miatt!' : '');
+    setWinReason(reason);
     
     setProfile(p => {
       let newP = { ...p };
@@ -340,7 +408,7 @@ export default function App() {
             updateGameState(onlineGameId, { ...gameState, gameOver: true }, 'finished', session?.user?.id);
           }
         }
-        handleWin(winnerIndex, false, true);
+        handleWin(winnerIndex, false, 'Időtúllépés miatt!');
       }
     }, 1000);
 
@@ -559,13 +627,13 @@ export default function App() {
 
                     <div>
                       <h3 className="text-sm text-[#a89078] uppercase tracking-wider mb-4">Várakozó Játékosok</h3>
-                      {waitingGames.length === 0 ? (
+                      {waitingGames.filter(g => lobbyUsers.has(g.player1_id)).length === 0 ? (
                         <div className="text-center py-8 text-white/40 italic">
                           Jelenleg nincs várakozó játékos.
                         </div>
                       ) : (
                         <div className="flex flex-col gap-3">
-                          {waitingGames.map(g => (
+                          {waitingGames.filter(g => lobbyUsers.has(g.player1_id)).map(g => (
                             <div key={g.id} className="flex justify-between items-center bg-[#241810] p-4 rounded-lg border border-white/5">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-[#1a0f08] border border-[#f0c866]/30 flex items-center justify-center">
@@ -675,7 +743,10 @@ export default function App() {
                   Új játék
                 </button>
                 <button 
-                  onClick={() => setView('menu')}
+                  onClick={() => {
+                    setShowWin(false);
+                    setView('menu');
+                  }}
                   className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"
                 >
                   Menü
@@ -853,7 +924,10 @@ export default function App() {
                     Újra
                   </button>
                   <button 
-                    onClick={() => setView('menu')}
+                    onClick={() => {
+                      setShowWin(false);
+                      setView('menu');
+                    }}
                     className="bg-transparent border border-[#f0c866]/30 text-[#f0c866] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f0c866]/10 transition-colors"
                   >
                     Menü
