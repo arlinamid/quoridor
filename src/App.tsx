@@ -141,6 +141,41 @@ export default function App() {
     saveLocalProfile(profile);
   }, [profile]);
 
+  const handleWin = useCallback((winnerIndex: number, fromRealtime = false, reason = '') => {
+    setShowWin(true);
+    setGameState(prev => ({ ...prev, gameOver: true }));
+    setWinReason(reason);
+    
+    setProfile(p => {
+      let newP = { ...p };
+      if (mode === 'ai') {
+        if (winnerIndex === 0) {
+          newP = { ...p, wins: p.wins + 1, xp: p.xp + 50, level: calculateLevel(p.xp + 50) };
+        } else {
+          newP = { ...p, losses: p.losses + 1, xp: p.xp + 10, level: calculateLevel(p.xp + 10) };
+        }
+      } else if (mode === 'online') {
+        if (winnerIndex === onlineRole) {
+          newP = { ...p, wins: p.wins + 1, xp: p.xp + 50, level: calculateLevel(p.xp + 50) };
+        } else {
+          newP = { ...p, losses: p.losses + 1, xp: p.xp + 10, level: calculateLevel(p.xp + 10) };
+        }
+      } else {
+        newP = { ...p, xp: p.xp + 20, level: calculateLevel(p.xp + 20) };
+      }
+
+      if (isSupabaseConfigured && session?.user?.id) {
+        updateDbProfile(session.user.id, {
+          wins: newP.wins,
+          losses: newP.losses,
+          xp: newP.xp,
+          level: newP.level
+        });
+      }
+      return newP;
+    });
+  }, [mode, session, onlineRole]);
+
   // Online Multiplayer Sync
   useEffect(() => {
     if (mode !== 'online' || !onlineGameId || !isSupabaseConfigured || !session) return;
@@ -289,41 +324,6 @@ export default function App() {
     setTimeLeft(120);
     setView('game');
   };
-
-  const handleWin = useCallback((winnerIndex: number, fromRealtime = false, reason = '') => {
-    setShowWin(true);
-    setGameState(prev => ({ ...prev, gameOver: true }));
-    setWinReason(reason);
-    
-    setProfile(p => {
-      let newP = { ...p };
-      if (mode === 'ai') {
-        if (winnerIndex === 0) {
-          newP = { ...p, wins: p.wins + 1, xp: p.xp + 50, level: calculateLevel(p.xp + 50) };
-        } else {
-          newP = { ...p, losses: p.losses + 1, xp: p.xp + 10, level: calculateLevel(p.xp + 10) };
-        }
-      } else if (mode === 'online') {
-        if (winnerIndex === onlineRole) {
-          newP = { ...p, wins: p.wins + 1, xp: p.xp + 50, level: calculateLevel(p.xp + 50) };
-        } else {
-          newP = { ...p, losses: p.losses + 1, xp: p.xp + 10, level: calculateLevel(p.xp + 10) };
-        }
-      } else {
-        newP = { ...p, xp: p.xp + 20, level: calculateLevel(p.xp + 20) };
-      }
-
-      if (isSupabaseConfigured && session?.user?.id) {
-        updateDbProfile(session.user.id, {
-          wins: newP.wins,
-          losses: newP.losses,
-          xp: newP.xp,
-          level: newP.level
-        });
-      }
-      return newP;
-    });
-  }, [mode, session, onlineRole]);
 
   const executeMove = useCallback((r: number, c: number) => {
     setAnimating(true);
