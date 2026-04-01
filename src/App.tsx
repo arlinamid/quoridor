@@ -6,11 +6,12 @@ import { GameState, initState, mmRoot, Wall } from './game/logic';
 import { getLocalProfile, saveLocalProfile, Profile, calculateLevel, supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile, createGame, joinGame, updateGameState, getUsernameByFingerprint, getLeaderboard } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
-import { Trophy, User, LogOut, Play, Cpu, ArrowLeft, Globe } from 'lucide-react';
+import { Rules } from './components/Rules';
+import { Trophy, User, LogOut, Play, Cpu, ArrowLeft, Globe, BookOpen } from 'lucide-react';
 import { cn } from './lib/utils';
 import { Session } from '@supabase/supabase-js';
 
-type View = 'auth' | 'menu' | 'game' | 'leaderboard' | 'tos' | 'privacy' | 'lobby';
+type View = 'auth' | 'menu' | 'game' | 'leaderboard' | 'tos' | 'privacy' | 'lobby' | 'rules';
 type GameMode = 'pvp' | 'ai' | 'online';
 
 export default function App() {
@@ -446,6 +447,12 @@ export default function App() {
             </motion.div>
           )}
 
+          {view === 'rules' && (
+            <motion.div key="rules" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 w-full max-w-3xl p-6 py-12 flex justify-center">
+              <Rules onBack={() => setView('menu')} />
+            </motion.div>
+          )}
+
           {view === 'tos' && (
             <motion.div key="tos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 w-full max-w-3xl p-6 py-12">
               <TOS onBack={() => setView('auth')} />
@@ -500,6 +507,15 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <span className="relative flex items-center justify-center gap-3">
                     <Globe size={18} /> Online Multiplayer <Globe size={18} />
+                  </span>
+                </button>
+                <button 
+                  onClick={() => setView('rules')}
+                  className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <span className="relative flex items-center justify-center gap-3">
+                    <BookOpen size={18} /> Szabályok <BookOpen size={18} />
                   </span>
                 </button>
               </div>
