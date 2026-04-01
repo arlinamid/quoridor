@@ -1,5 +1,5 @@
 {
-  "name": "Quoridor: Falsakk",
+  "name": "Quoridor",
   "description": "A 3D strategy board game with gamification and Supabase integration.",
   "requestFramePermissions": []
 }
