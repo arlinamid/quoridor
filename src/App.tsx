@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
 import { QuoridorBoard } from './components/QuoridorBoard';
-import { GameState, initState, mmRoot, Wall } from './game/logic';
+import { GameState, initState, mmRoot, Wall, SkillType, cloneS, applySkill, advanceTurn } from './game/logic';
 import { getLocalProfile, saveLocalProfile, Profile, calculateLevel, supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile, createGame, joinGame, updateGameState, getUsernameByFingerprint, getLeaderboard } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -12,7 +12,7 @@ import { cn } from './lib/utils';
 import { Session } from '@supabase/supabase-js';
 
 type View = 'auth' | 'menu' | 'game' | 'leaderboard' | 'tos' | 'privacy' | 'lobby' | 'rules';
-type GameMode = 'pvp' | 'ai' | 'online';
+type GameMode = 'pvp' | 'ai' | 'online' | 'treasure-pvp';
 
 export default function App() {
   const [view, setView] = useState<View>('auth');
@@ -24,6 +24,7 @@ export default function App() {
   const [wallOrient, setWallOrient] = useState<'h' | 'v'>('h');
   const [animating, setAnimating] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [targetingSkill, setTargetingSkill] = useState<SkillType | null>(null);
   const [profile, setProfile] = useState<Profile>(getLocalProfile());
   const [showWin, setShowWin] = useState(false);
   const [winReason, setWinReason] = useState<string>('');
@@ -317,6 +318,7 @@ export default function App() {
     setShowWin(false);
     setWinReason('');
     setStatusMsg('');
+    setTargetingSkill(null);
     if (selectedMode === 'online') {
       setView('lobby');
       setOnlineGameId(null);
@@ -324,7 +326,7 @@ export default function App() {
       return;
     }
     setMode(selectedMode);
-    setGameState(initState());
+    setGameState(initState(selectedMode === 'treasure-pvp'));
     setWallMode(false);
     setWallOrient('h');
     setAnimating(false);
@@ -335,14 +337,25 @@ export default function App() {
   const executeMove = useCallback((r: number, c: number) => {
     setAnimating(true);
     setGameState(prev => {
-      const next = { ...prev, players: [...prev.players], lastMoveTime: Date.now() };
-      next.players[prev.turn] = { ...next.players[prev.turn], r, c };
+      const next = cloneS(prev);
+      next.lastMoveTime = Date.now();
+      next.players[prev.turn].r = r;
+      next.players[prev.turn].c = c;
       
+      // Check trap
+      const trapIdx = next.traps?.findIndex(t => t.r === r && t.c === c && t.owner !== prev.turn);
+      if (trapIdx !== undefined && trapIdx !== -1) {
+        next.traps!.splice(trapIdx, 1);
+        next.players[prev.turn].r = prev.turn === 0 ? 0 : 8;
+        next.players[prev.turn].c = 4;
+        setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
+      }
+
       let isWin = false;
-      if (r === next.players[prev.turn].goalRow) {
+      if (next.players[prev.turn].r === next.players[prev.turn].goalRow) {
         isWin = true;
       } else {
-        next.turn = 1 - prev.turn;
+        advanceTurn(next);
       }
 
       if (mode === 'online' && onlineGameId) {
@@ -363,10 +376,11 @@ export default function App() {
   const executeWall = useCallback((r: number, c: number, orient: 'h' | 'v') => {
     setAnimating(true);
     setGameState(prev => {
-      const next = { ...prev, players: [...prev.players], walls: [...prev.walls], lastMoveTime: Date.now() };
+      const next = cloneS(prev);
+      next.lastMoveTime = Date.now();
       next.walls.push({ r, c, orient });
       next.players[prev.turn].walls--;
-      next.turn = 1 - prev.turn;
+      advanceTurn(next);
 
       if (mode === 'online' && onlineGameId) {
         updateGameState(onlineGameId, next, 'playing');
@@ -379,6 +393,93 @@ export default function App() {
       setAnimating(false);
     }, 350);
   }, [mode, onlineGameId]);
+
+  const executeDig = useCallback(() => {
+    setAnimating(true);
+    setGameState(prev => {
+      const next = cloneS(prev);
+      const p = next.players[next.turn];
+      
+      const tIdx = next.treasures?.findIndex(t => t.r === p.r && t.c === p.c);
+      if (tIdx !== undefined && tIdx !== -1) {
+        next.treasures!.splice(tIdx, 1);
+        const SKILLS: SkillType[] = ["TELEPORT", "HAMMER", "SKIP", "MOLE", "DYNAMITE", "SHIELD", "WALLS", "MAGNET", "TRAP", "SWAP"];
+        const foundSkill = SKILLS[Math.floor(Math.random() * SKILLS.length)];
+        if (!p.inventory) p.inventory = [];
+        if (p.inventory.length < 2) { // Max 2 skills
+          p.inventory.push(foundSkill);
+          setStatusMsg(`Találtál egy képességet: ${foundSkill}`);
+        } else {
+          setStatusMsg(`Találtál egy képességet (${foundSkill}), de tele van az inventory-d!`);
+        }
+      }
+
+      advanceTurn(next);
+      
+      if (mode === 'online' && onlineGameId) {
+        updateGameState(onlineGameId, next, 'playing');
+      }
+      return next;
+    });
+    setTimeout(() => setAnimating(false), 350);
+  }, [mode, onlineGameId]);
+
+  const executeSkill = useCallback((skill: SkillType, target?: { r: number, c: number }) => {
+    setAnimating(true);
+    setGameState(prev => {
+      const next = applySkill(prev, skill, target);
+      
+      // Check trap for the player who just moved (if TELEPORT or SWAP)
+      if (skill === 'TELEPORT' || skill === 'SWAP') {
+        const p = next.players[prev.turn];
+        const trapIdx = next.traps?.findIndex(t => t.r === p.r && t.c === p.c && t.owner !== prev.turn);
+        if (trapIdx !== undefined && trapIdx !== -1) {
+          next.traps!.splice(trapIdx, 1);
+          p.r = prev.turn === 0 ? 0 : 8;
+          p.c = 4;
+          setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
+        }
+      }
+      
+      // Check trap for the other player (if SWAP or MAGNET)
+      if (skill === 'SWAP' || skill === 'MAGNET') {
+        const o = next.players[1 - prev.turn];
+        const oTrapIdx = next.traps?.findIndex(t => t.r === o.r && t.c === o.c && t.owner !== (1 - prev.turn));
+        if (oTrapIdx !== undefined && oTrapIdx !== -1) {
+          next.traps!.splice(oTrapIdx, 1);
+          o.r = (1 - prev.turn) === 0 ? 0 : 8;
+          o.c = 4;
+          setStatusMsg('Az ellenfél csapdába lépett!');
+        }
+      }
+
+      let isWin = false;
+      if (next.players[prev.turn].r === next.players[prev.turn].goalRow) {
+        isWin = true;
+      } else if (next.players[1 - prev.turn].r === next.players[1 - prev.turn].goalRow) {
+        // Opponent might win if pulled into goal by MAGNET or SWAP
+        isWin = true;
+        // The opponent wins, so we need to handle that.
+        // But handleWin takes the winning player's index.
+        // We can just call handleWin(1 - prev.turn)
+      } else {
+        advanceTurn(next);
+      }
+      
+      if (mode === 'online' && onlineGameId) {
+        updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
+      }
+
+      if (isWin) {
+        const winnerIdx = next.players[prev.turn].r === next.players[prev.turn].goalRow ? prev.turn : 1 - prev.turn;
+        setTimeout(() => handleWin(winnerIdx), 400);
+      }
+
+      return next;
+    });
+    setTargetingSkill(null);
+    setTimeout(() => setAnimating(false), 350);
+  }, [handleWin, mode, onlineGameId, session]);
 
   // AI Turn Handling
   useEffect(() => {
@@ -567,6 +668,15 @@ export default function App() {
                       <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-center gap-3">
                         <User size={18} /> 1 vs 1 <User size={18} />
+                      </span>
+                    </button>
+                    <button 
+                      onClick={() => startGame('treasure-pvp')}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#e8b830]/50 text-[#e8b830] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#e8b830] hover:shadow-[0_0_40px_rgba(232,184,48,0.3),inset_0_0_30px_rgba(232,184,48,0.1)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#e8b830]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">
+                        <User size={18} /> Kincskereső <User size={18} />
                       </span>
                     </button>
                     <button 
@@ -759,7 +869,82 @@ export default function App() {
                 onWallPlace={executeWall}
                 animating={animating}
                 disabled={(mode === 'ai' && gameState.turn === 1) || (mode === 'online' && gameState.turn !== onlineRole)}
+                targetingSkill={targetingSkill}
+                onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })}
               />
+
+              {gameState.treasureMode && (
+                <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-2">
+                  {((mode === 'pvp' || mode === 'treasure-pvp') || (mode === 'ai' && gameState.turn === 0) || (mode === 'online' && gameState.turn === onlineRole)) && 
+                   gameState.treasures?.some(t => t.r === gameState.players[gameState.turn].r && t.c === gameState.players[gameState.turn].c) && (
+                    <button
+                      onClick={executeDig}
+                      className="bg-[#e8b830] text-[#1a0f0a] font-bold px-6 py-2 rounded-md text-sm hover:bg-[#f0c866] transition-all shadow-[0_0_15px_rgba(232,184,48,0.4)]"
+                    >
+                      ⛏️ Kincs kiásása (1 kör)
+                    </button>
+                  )}
+
+                  <div className="flex gap-4 w-full justify-between px-4">
+                    <div className="flex flex-col items-start">
+                      <div className="text-xs text-[#a89078] mb-1">P1 Képességek:</div>
+                      <div className="flex gap-1">
+                        {gameState.players[0].inventory?.map((skill, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              if (gameState.turn === 0 && ((mode === 'pvp' || mode === 'treasure-pvp') || (mode === 'ai' && gameState.turn === 0) || (mode === 'online' && gameState.turn === onlineRole))) {
+                                if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
+                                  setTargetingSkill(targetingSkill === skill ? null : skill);
+                                } else {
+                                  executeSkill(skill);
+                                }
+                              }
+                            }}
+                            disabled={gameState.turn !== 0 || (mode === 'ai' && gameState.turn !== 0) || (mode === 'online' && gameState.turn !== onlineRole)}
+                            className={cn(
+                              "text-xs px-2 py-1 rounded border",
+                              targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
+                              (gameState.turn !== 0 || (mode === 'ai' && gameState.turn !== 0) || (mode === 'online' && gameState.turn !== onlineRole)) && "opacity-50 cursor-not-allowed"
+                            )}
+                          >
+                            {mode === 'online' && onlineRole !== 0 ? '???' : skill}
+                          </button>
+                        ))}
+                        {(!gameState.players[0].inventory || gameState.players[0].inventory.length === 0) && <span className="text-xs text-white/20">-</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <div className="text-xs text-[#a89078] mb-1">P2 Képességek:</div>
+                      <div className="flex gap-1">
+                        {gameState.players[1].inventory?.map((skill, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              if (gameState.turn === 1 && ((mode === 'pvp' || mode === 'treasure-pvp') || (mode === 'online' && gameState.turn === onlineRole))) {
+                                if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
+                                  setTargetingSkill(targetingSkill === skill ? null : skill);
+                                } else {
+                                  executeSkill(skill);
+                                }
+                              }
+                            }}
+                            disabled={gameState.turn !== 1 || mode === 'ai' || (mode === 'online' && gameState.turn !== onlineRole)}
+                            className={cn(
+                              "text-xs px-2 py-1 rounded border",
+                              targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
+                              (gameState.turn !== 1 || mode === 'ai' || (mode === 'online' && gameState.turn !== onlineRole)) && "opacity-50 cursor-not-allowed"
+                            )}
+                          >
+                            {mode === 'online' && onlineRole !== 1 ? '???' : skill}
+                          </button>
+                        ))}
+                        {(!gameState.players[1].inventory || gameState.players[1].inventory.length === 0) && <span className="text-xs text-white/20">-</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap justify-center gap-3 py-4 w-full">
                 <button 
