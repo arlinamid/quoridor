@@ -1,7 +1,9 @@
 # Quoridor Falsakk — A Stratégia Játéka
 
 A Quoridor board game web-alapú implementációja React + Supabase stack-kel.
-Magyar nyelvű felület, 6 játékmód, valós idejű online multiplayer, és egy kincskeresős skill-rendszer.
+Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI botok, és egy kincskeresős skill-rendszer.
+
+**Live:** https://quoridor-snowy.vercel.app
 
 ---
 
@@ -13,8 +15,19 @@ Magyar nyelvű felület, 6 játékmód, valós idejű online multiplayer, és eg
 | **1 vs 1 — Kincskereső** | Helyi kétjátékos, kincsekkel és skillekkel | +20 XP |
 | **1 vs Gép — Normal** | AI ellenfél (Könnyű / Közepes / Nehéz) | +50 győzelem / +10 vereség |
 | **1 vs Gép — Kincskereső** | AI + treasure mode | +50 / +10 |
-| **Online — Normal** | Valós idejű Supabase multiplayer | +50 / +10 |
+| **Online — Normal** | Valós idejű 2–4 játékos multiplayer | +50 / +10 |
 | **Online — Kincskereső** | Online + treasure mode | +50 / +10 |
+
+---
+
+## Multiplayer funkciók
+
+- **2–4 játékos** — a host választja a létszámot (2/3/4) a lobby előtt
+- **AI botok** — üres slotok feltölthetők bottal; a bot BFS-alapú greedy algoritmust használ, és a host klienséről fut
+- **Kézi indítás** — host indíthat, ha ≥2 slot foglalt; 2 perc után automatikus indítás
+- **Visszacsatlakozás** — kiesés után 2 percen belül újra be lehet lépni a meccsbe
+- **Heartbeat rendszer** — 30 másodpercenként életjelet küld; inaktív játékok 2 perc után automatikusan lezáródnak
+- **Játékon belüli maradás** — új online meccs nem indítható, amíg egy másikban benne vagy
 
 ---
 
@@ -29,6 +42,8 @@ Magyar nyelvű felület, 6 játékmód, valós idejű online multiplayer, és eg
 | 3D háttér | Three.js |
 | Backend | Supabase (PostgreSQL + Realtime + Edge Functions) |
 | Auth | Supabase Anonymous Auth |
+| Deploy | Vercel (SPA + serverless API routes) |
+| DB Cron | Supabase pg_cron |
 
 ---
 
@@ -38,23 +53,28 @@ Magyar nyelvű felület, 6 játékmód, valós idejű online multiplayer, és eg
 src/
   App.tsx                    # Fő állapotkezelés és routing
   game/
-    logic.ts                 # Játéklogika: BFS, Minimax, skill rendszer
+    logic.ts                 # Játéklogika: BFS, Minimax, skill rendszer, 4 játékos
   components/
-    QuoridorBoard.tsx        # Játéktábla UI (17×17 grid)
+    QuoridorBoard.tsx        # Játéktábla UI (17×17 grid, skálázható cellaméret)
     ThreeBackground.tsx      # Three.js 3D háttér
     Rules.tsx                # Szabályok oldal
     LegalDocs.tsx            # ÁSZF és Adatvédelem
     views/
       AuthView.tsx           # Bejelentkezési képernyő
       MenuView.tsx           # Lépcsőzetes főmenü
-      LobbyView.tsx          # Online lobby
-      GameView.tsx           # Játékfelület
+      LobbyView.tsx          # Online lobby (2–4 játékos, bot slot-ok)
+      GameView.tsx           # Játékfelület (dinamikus 2–4 játékos panel)
       LeaderboardView.tsx    # Statisztikák és ranglista
   lib/
-    supabase.ts              # Supabase kliens, auth, DB és Edge Function hívások
-    types.ts                 # Megosztott típusok (GameMode, View, helper predikátumok)
+    supabase.ts              # Supabase kliens, auth, DB, Edge Function hívások
+    types.ts                 # Megosztott típusok (GameMode, View, predikátumok)
     fingerprint.ts           # Eszközazonosítás visszatérő játékosokhoz
     utils.ts                 # cn() segédfüggvény
+
+api/                         # Vercel serverless API route-ok
+  active-game.ts             # GET ?userId= — aktív játék keresése (visszalépéshez)
+  heartbeat.ts               # POST — életjel + stale game sweep
+  cleanup-games.ts           # GET — inaktív játékok lezárása (pg_cron hívja)
 
 supabase/
   functions/
@@ -77,7 +97,7 @@ VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
 ```
 
-Ha a Supabase nincs konfigurálva, az alkalmazás lokális módban indul (localStorage profil, nincs online funkció).
+Ha a Supabase nincs konfigurálva, az app lokális módban indul (localStorage profil, nincs online funkció).
 
 ### Fejlesztési szerver
 
@@ -89,6 +109,12 @@ npm run dev
 
 ```bash
 npm run build
+```
+
+### Deploy (Vercel)
+
+```bash
+npx vercel --prod
 ```
 
 ---
@@ -115,37 +141,68 @@ create table games (
   id uuid primary key default gen_random_uuid(),
   player1_id uuid references profiles(id),
   player2_id uuid references profiles(id),
+  player3_id uuid references profiles(id),
+  player4_id uuid references profiles(id),
   state jsonb,
-  status text default 'waiting',   -- waiting | playing | finished
+  status text default 'waiting',   -- waiting | playing | finished | abandoned
   winner_id uuid references profiles(id),
+  max_players integer default 2,
+  last_heartbeat timestamptz default now(),
   created_at timestamptz default now()
+);
+```
+
+### Migrációk (ha meglévő táblák frissítése szükséges)
+
+```sql
+alter table games add column if not exists max_players integer default 2;
+alter table games add column if not exists player3_id uuid references auth.users(id);
+alter table games add column if not exists player4_id uuid references auth.users(id);
+alter table games add column if not exists last_heartbeat timestamptz default now();
+```
+
+### pg_cron — automatikus játék lezárás
+
+```sql
+create extension if not exists pg_cron;
+
+select cron.schedule(
+  'cleanup-stale-games',
+  '*/2 * * * *',
+  $$
+    update games
+    set status = 'abandoned'
+    where status = 'playing'
+      and last_heartbeat < now() - interval '2 minutes'
+  $$
 );
 ```
 
 ### Edge Function deploy
 
 ```bash
-supabase functions deploy award-xp
+supabase functions deploy award-xp --project-ref <project-ref>
 ```
 
-Az `award-xp` Edge Function server-side XP validációt végez — megakadályozza a kliens oldali XP manipulációt. A kliens automatikusan fallback-el direkt DB frissítésre, ha a funkció nem elérhető.
+Az `award-xp` Edge Function server-side XP validációt végez — megakadályozza a kliens oldali XP manipulációt. CORS fejlécek konfigurálva (`Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: POST, OPTIONS`).
 
 ---
 
 ## Játékszabályok
 
-- 9×9-es tábla, két játékos
-- Cél: elérni az ellentétes oldalt (P1: sor 8, P2: sor 0)
-- Minden játékos kezdetben 10 fallal rendelkezik
-- Fal lerakása után is mindkét játékosnak kell elérési útvonalnak lennie (BFS validáció)
+- 9×9-es tábla, 2–4 játékos
+- **P1** (piros): sor 0 → sor 8 · **P2** (sötétkék): sor 8 → sor 0
+- **P3** (zöld): oszlop 0 → oszlop 8 · **P4** (lila): oszlop 8 → oszlop 0
+- Falak kezdeti száma: 10 (2 jt.) / 7 (3 jt.) / 5 (4 jt.)
+- Fal lerakása után mindenkinek kell elérési útvonalnak lennie (BFS validáció)
 - Ugrás lehetséges, ha az ellenfél szomszédos és mögötte szabad
-- **Kincskereső módban**: kincsek ásásával skilleket lehet szerezni (max 2 db)
+- **Kincskereső módban**: `játékosszám × 2` kincs; kiásással skilleket lehet szerezni (max 2 db)
 
 ### Skill lista
 
 | Skill | Leírás |
 |-------|--------|
-| TELEPORT | Ugrás 3 cellán belüli pozícióra |
+| TELEPORT | Ugrás legfeljebb 2 cellára |
 | HAMMER | Egy fal lerombolása |
 | SKIP | Ellenfél körének kihagyása |
 | MOLE | 1 körön át átsétálhat falakon |
@@ -164,3 +221,18 @@ Az `award-xp` Edge Function server-side XP validációt végez — megakadályoz
 - XP kiosztása server-side az `award-xp` Edge Functionön keresztül
 - Ranglista: top 10 játékos XP szerint
 - Eszközazonosítás: visszatérő játékosok automatikus felismerése fingerprint alapján
+- Lokális fallback: Supabase nélkül is működik localStorage-ban
+
+---
+
+## Heartbeat & játék életciklus
+
+```
+Játék állapotok:
+  waiting → playing → finished   (normál befejezés)
+                    → abandoned  (heartbeat timeout)
+
+Heartbeat folyamat:
+  Kliens  ──POST /api/heartbeat every 30s──▶  Supabase DB (last_heartbeat)
+  pg_cron ──every 2 min────────────────────▶  abandoned if last_heartbeat > 2 min
+```
