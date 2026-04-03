@@ -159,6 +159,7 @@ export function cloneS(s: GameState): GameState {
     lastMoveTime: s.lastMoveTime,
     treasureMode: s.treasureMode,
     playerCount: s.playerCount,
+    botPlayers: s.botPlayers ? [...s.botPlayers] : undefined,
     treasures: s.treasures ? s.treasures.map(t => ({ ...t })) : undefined,
     traps: s.traps ? s.traps.map(t => ({ ...t })) : undefined
   };
@@ -404,4 +405,47 @@ export function mmRoot(s: GameState, d: number): AIMove {
   }
 
   return ba || { type: 'move', r: mv[0]?.r ?? s.players[1].r, c: mv[0]?.c ?? s.players[1].c };
+}
+
+// Greedy bot for any player index: picks the move that minimises BFS distance to goal.
+// Falls back to placing a wall that best blocks the closest opponent if no progress is possible.
+export function greedyBotMove(s: GameState, pi: number): AIMove {
+  const moves = getValidMoves(s, pi);
+  let bestMove: AIMove | null = null;
+  let bestDist = bfsDist(s, pi);
+
+  for (const m of moves) {
+    const ns = cloneS(s);
+    ns.players[pi].r = m.r;
+    ns.players[pi].c = m.c;
+    const d = bfsDist(ns, pi);
+    if (d < bestDist) { bestDist = d; bestMove = { type: 'move', r: m.r, c: m.c }; }
+  }
+
+  // If a step forward was found, take it
+  if (bestMove) return bestMove;
+
+  // Try a wall that delays the leading opponent most
+  if (s.players[pi].walls > 0) {
+    const opponents = s.players
+      .map((_, i) => i)
+      .filter(i => i !== pi)
+      .sort((a, b) => bfsDist(s, a) - bfsDist(s, b));
+    const opp = opponents[0];
+    const baseDist = bfsDist(s, opp);
+    let bestWall: AIMove | null = null;
+    let bestGain = 0;
+    for (const w of getWC(s, pi)) {
+      if (!isValidWall(s, w.r, w.c, w.orient)) continue;
+      const ns = cloneS(s);
+      ns.walls.push(w);
+      const gain = bfsDist(ns, opp) - baseDist;
+      if (gain > bestGain) { bestGain = gain; bestWall = { type: 'wall', r: w.r, c: w.c, orient: w.orient }; }
+    }
+    if (bestWall && bestGain >= 2) return bestWall;
+  }
+
+  // Fallback: any available move
+  if (moves.length > 0) return { type: 'move', r: moves[0].r, c: moves[0].c };
+  return { type: 'move', r: s.players[pi].r, c: s.players[pi].c };
 }

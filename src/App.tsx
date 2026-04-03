@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
-import { GameState, initState, mmRoot, SkillType, cloneS, applySkill, advanceTurn, hasWon } from './game/logic';
+import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile,
@@ -206,11 +206,11 @@ export default function App() {
   // Bot AI effect: host drives bot players in online multiplayer
   useEffect(() => {
     if (view !== 'game' || !isOnlineMode(mode) || onlineRole !== 0 || gameState.gameOver || animating) return;
-    if (!gameState.botPlayers?.includes(gameState.turn)) return;
+    const botPi = gameState.turn;
+    if (!gameState.botPlayers?.includes(botPi)) return;
     setStatusMsg('Bot gondolkodik...');
-    const depth = 2;
     const timer = setTimeout(() => {
-      const move = mmRoot(gameState, depth);
+      const move = greedyBotMove(gameState, botPi);
       setStatusMsg('');
       if (move.type === 'move') executeMove(move.r, move.c);
       else executeWall(move.r, move.c, move.orient);
