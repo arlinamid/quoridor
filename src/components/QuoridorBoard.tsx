@@ -18,21 +18,21 @@ interface BoardProps {
 
 export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget }: BoardProps) {
   const n = state.playerCount ?? state.players.length;
-  // Larger cells for 3-4 player games so the board stays readable
+  // 3-4 player: same min as 2-player (fits mobile), higher vw% and max for desktop
   const cellCls = n >= 3
-    ? "w-[clamp(36px,7.5vw,64px)] h-[clamp(36px,7.5vw,64px)]"
+    ? "w-[clamp(28px,8vw,60px)] h-[clamp(28px,8vw,60px)]"
     : "w-[clamp(28px,6vw,48px)] h-[clamp(28px,6vw,48px)]";
   const gapHCls = n >= 3
-    ? "w-[clamp(36px,7.5vw,64px)] h-[clamp(7px,1.8vw,10px)]"
+    ? "w-[clamp(28px,8vw,60px)] h-[clamp(6px,1.5vw,10px)]"
     : "w-[clamp(28px,6vw,48px)] h-[clamp(6px,1.5vw,8px)]";
   const gapVCls = n >= 3
-    ? "w-[clamp(7px,1.8vw,10px)] h-[clamp(36px,7.5vw,64px)]"
+    ? "w-[clamp(6px,1.5vw,10px)] h-[clamp(28px,8vw,60px)]"
     : "w-[clamp(6px,1.5vw,8px)] h-[clamp(28px,6vw,48px)]";
   const gapBothCls = n >= 3
-    ? "w-[clamp(7px,1.8vw,10px)] h-[clamp(7px,1.8vw,10px)]"
+    ? "w-[clamp(6px,1.5vw,10px)] h-[clamp(6px,1.5vw,10px)]"
     : "w-[clamp(6px,1.5vw,8px)] h-[clamp(6px,1.5vw,8px)]";
   const pawnCls = n >= 3
-    ? "w-[clamp(26px,5.5vw,44px)] h-[clamp(26px,5.5vw,44px)]"
+    ? "w-[clamp(20px,6vw,44px)] h-[clamp(20px,6vw,44px)]"
     : "w-[clamp(20px,4.5vw,32px)] h-[clamp(20px,4.5vw,32px)]";
   const [hoveredWall, setHoveredWall] = useState<Wall | null>(null);
 
