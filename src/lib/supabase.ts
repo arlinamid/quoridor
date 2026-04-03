@@ -121,3 +121,18 @@ export const updateGameState = async (gameId: string, state: any, status: string
   if (winnerId) payload.winner_id = winnerId;
   await supabase.from('games').update(payload).eq('id', gameId);
 };
+
+// --- Server-side XP (Edge Function) ---
+// Falls back to null on error; App.tsx falls back to direct DB update in that case.
+export const awardXp = async (session: { access_token: string }, mode: string, won: boolean): Promise<Partial<Profile> | null> => {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.functions.invoke('award-xp', {
+    body: { mode, won },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (error) {
+    console.error('award-xp Edge Function hiba:', error);
+    return null;
+  }
+  return data as Partial<Profile>;
+};
