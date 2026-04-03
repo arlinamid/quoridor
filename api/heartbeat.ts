@@ -15,14 +15,25 @@ export default async function handler(req: any, res: any) {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Only update if the user is actually a player in this game (basic auth check)
+  const now = new Date().toISOString();
+  const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+  // Update heartbeat (only if caller is a valid player in this game)
   const { error } = await supabase
     .from('games')
-    .update({ last_heartbeat: new Date().toISOString() })
+    .update({ last_heartbeat: now })
     .eq('id', gameId)
     .eq('status', 'playing')
     .or(`player1_id.eq.${userId},player2_id.eq.${userId},player3_id.eq.${userId},player4_id.eq.${userId}`);
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Piggyback: sweep stale games on every heartbeat (backup for pg_cron)
+  await supabase
+    .from('games')
+    .update({ status: 'abandoned' })
+    .eq('status', 'playing')
+    .lt('last_heartbeat', cutoff);
+
   return res.json({ ok: true });
 }
