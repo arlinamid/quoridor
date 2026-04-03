@@ -225,11 +225,18 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [onlineGameId, onlineRole]);
 
-  // Bot AI effect: host drives bot players in online multiplayer
+  // Bot AI effect: lowest-indexed human player drives bots.
+  // If host (role 0) leaves, role 1 automatically becomes the controller.
   useEffect(() => {
-    if (view !== 'game' || !isOnlineMode(mode) || onlineRole !== 0 || gameState.gameOver || animating) return;
+    if (view !== 'game' || !isOnlineMode(mode) || gameState.gameOver || animating) return;
     const botPi = gameState.turn;
     if (!gameState.botPlayers?.includes(botPi)) return;
+    // Determine controller: human slot with the lowest index
+    const n = gameState.players.length;
+    const botSet = new Set(gameState.botPlayers ?? []);
+    const humanRoles = Array.from({ length: n }, (_, i) => i).filter(i => !botSet.has(i));
+    const controllerRole = humanRoles.length > 0 ? Math.min(...humanRoles) : 0;
+    if (onlineRole !== controllerRole) return;
     setStatusMsg('Bot gondolkodik...');
     const timer = setTimeout(() => {
       const move = greedyBotMove(gameState, botPi);
@@ -421,7 +428,9 @@ export default function App() {
 
   const handleLeaveOnlineGame = useCallback(async () => {
     if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
-    if (onlineGameId && onlineRole === 0) await cancelGame(onlineGameId);
+    // Only cancel (remove from DB) when leaving the lobby; in-game leave lets
+    // remaining players continue with bots driven by the new lowest-role human.
+    if (onlineGameId && onlineRole === 0 && viewRef.current === 'lobby') await cancelGame(onlineGameId);
     setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setView('menu');
   }, [onlineGameId, onlineRole]);
 
