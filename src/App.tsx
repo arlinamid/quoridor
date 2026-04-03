@@ -5,7 +5,7 @@ import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySk
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile,
-  createGame, joinGame, startOnlineGame, cancelGame, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
+  createGame, joinGame, startOnlineGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -45,7 +45,7 @@ export default function App() {
   const [botSlots, setBotSlots] = useState<number[]>([]);
   const [rejoinCandidate, setRejoinCandidate] = useState<any | null>(null);
   const [waitingGames, setWaitingGames] = useState<any[]>([]);
-  const [opponent, setOpponent] = useState<Profile | null>(null);
+  const [playerProfiles, setPlayerProfiles] = useState<Record<number, Profile>>({});
   const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
 
   const [leaderboardTab, setLeaderboardTab] = useState<'personal' | 'online'>('personal');
@@ -97,6 +97,17 @@ export default function App() {
   const loadProfile = async (userId: string) => {
     const dbProfile = await getDbProfile(userId);
     if (dbProfile) setProfile(dbProfile);
+  };
+
+  const loadPlayerProfiles = async (gameRow: any, myUserId: string) => {
+    const ids: (string | null)[] = [gameRow.player1_id, gameRow.player2_id, gameRow.player3_id, gameRow.player4_id];
+    const map: Record<number, Profile> = {};
+    await Promise.all(ids.map(async (uid, idx) => {
+      if (!uid || uid === myUserId) return;
+      const p = await getDbProfile(uid);
+      if (p) map[idx] = p;
+    }));
+    setPlayerProfiles(map);
   };
 
   const checkActiveGame = async (userId: string) => {
@@ -153,12 +164,7 @@ export default function App() {
         // Always update hosted game data so slot UI stays current
         setHostedGameData(g);
         if (g.status === 'playing' && viewRef.current === 'lobby') {
-          // Load first available opponent profile
-          const opponentIds = [g.player2_id, g.player3_id, g.player4_id].filter(Boolean);
-          if (opponentIds.length > 0) {
-            const opp = await getDbProfile(opponentIds[0]);
-            if (opp) setOpponent(opp);
-          }
+          if (session) await loadPlayerProfiles(g, session.user.id);
           setGameState(g.state);
           setView('game');
         } else if (g.status === 'playing' || g.status === 'waiting') {
@@ -413,6 +419,8 @@ export default function App() {
   const handleCreateOnlineGame = async () => {
     if (!session) return;
     setAuthLoading(true);
+    // Cancel any stale waiting games before creating a new one
+    await cancelMyWaitingGames(session.user.id);
     const state = initState(mode === 'treasure-online', maxPlayers);
     const { data, error } = await createGame(session.user.id, state, maxPlayers);
     setAuthLoading(false);
@@ -431,8 +439,6 @@ export default function App() {
     setAuthLoading(true);
     const { data, error } = await joinGame(gameId, session.user.id, slotIndex);
     if (data) {
-      const opp = await getDbProfile(p1Id);
-      if (opp) setOpponent(opp);
       setOnlineGameId(gameId);
       setOnlineRole(slotIndex);
       setGameState(state);
@@ -456,7 +462,7 @@ export default function App() {
     setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setView('menu');
   }, [onlineGameId, onlineRole]);
 
-  const handleRejoinGame = useCallback((game: any) => {
+  const handleRejoinGame = useCallback(async (game: any) => {
     if (!session) return;
     const myRole = game.player1_id === session.user.id ? 0
       : game.player2_id === session.user.id ? 1
@@ -467,6 +473,7 @@ export default function App() {
     setOnlineRole(myRole);
     setGameState(game.state);
     setRejoinCandidate(null);
+    await loadPlayerProfiles(game, session.user.id);
     setView('game');
   }, [session]);
 
@@ -556,7 +563,7 @@ export default function App() {
             <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
-            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} opponent={opponent} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} />
+            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} />
           )}
           {view === 'leaderboard' && (
             <LeaderboardView key="leaderboard" profile={profile} leaderboardData={leaderboardData} tab={leaderboardTab} onTabChange={setLeaderboardTab} onBack={() => setView('menu')} isSupabaseConfigured={isSupabaseConfigured} />

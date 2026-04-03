@@ -97,6 +97,11 @@ export const getLeaderboard = async (limit: number = 10) => {
 
 // --- Multiplayer Functions ---
 
+export const cancelMyWaitingGames = async (userId: string) => {
+  if (!isSupabaseConfigured) return;
+  await supabase.from('games').update({ status: 'cancelled' }).eq('player1_id', userId).eq('status', 'waiting');
+};
+
 export const createGame = async (userId: string, initialState: any, maxPlayers = 2) => {
   if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };
   return supabase.from('games').insert({

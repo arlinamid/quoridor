@@ -19,7 +19,7 @@ interface GameViewProps {
   timeLeft: number;
   onlineRole: number;
   profile: Profile;
-  opponent: Profile | null;
+  playerProfiles: Record<number, Profile>;
   onToggleWallMode: () => void;
   onToggleWallOrient: () => void;
   onMove: (r: number, c: number) => void;
@@ -34,7 +34,7 @@ interface GameViewProps {
 
 export function GameView({
   gameState, mode, wallMode, wallOrient, animating, statusMsg, targetingSkill,
-  timeLeft, onlineRole, profile, opponent,
+  timeLeft, onlineRole, profile, playerProfiles,
   onToggleWallMode, onToggleWallOrient, onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
 }: GameViewProps) {
@@ -46,8 +46,7 @@ export function GameView({
     if (isAIMode(mode) && pi === 1) return 'Gép (AI)';
     if (isOnlineMode(mode)) {
       if (pi === onlineRole) return profile.username;
-      if (pi === 0 && onlineRole !== 0) return opponent?.username || PLAYER_LABELS[pi];
-      if (pi === 1 && onlineRole !== 1) return opponent?.username || PLAYER_LABELS[pi];
+      return playerProfiles[pi]?.username || PLAYER_LABELS[pi];
     }
     return `Játékos ${pi + 1}`;
   };
