@@ -5,45 +5,60 @@ export type PlayerEffect = {
   duration: number;
 };
 
-export type Player = { 
-  r: number; 
-  c: number; 
-  walls: number; 
-  goalRow: number;
+export type Player = {
+  r: number;
+  c: number;
+  walls: number;
+  goalRow?: number;   // P0 (row 0→8) and P1 (row 8→0)
+  goalCol?: number;   // P2 (col 0→8) and P3 (col 8→0)
   inventory?: SkillType[];
   effects?: PlayerEffect[];
 };
 
 export type Wall = { r: number; c: number; orient: 'h' | 'v' };
 
-export type GameState = { 
-  players: Player[]; 
-  walls: Wall[]; 
-  turn: number; 
-  gameOver: boolean; 
+export type GameState = {
+  players: Player[];
+  walls: Wall[];
+  turn: number;
+  gameOver: boolean;
   lastMoveTime?: number;
   treasureMode?: boolean;
+  playerCount?: number;
+  botPlayers?: number[];   // indices of bot-controlled players
   treasures?: { r: number; c: number }[];
   traps?: { r: number; c: number; owner: number }[];
 };
 
-export function initState(treasureMode = false): GameState {
+export function hasWon(p: Player): boolean {
+  return (p.goalRow !== undefined && p.r === p.goalRow) ||
+         (p.goalCol !== undefined && p.c === p.goalCol);
+}
+
+export function initState(treasureMode = false, playerCount = 2): GameState {
+  const wallCount = playerCount === 4 ? 5 : playerCount === 3 ? 7 : 10;
+
+  const players: Player[] = [
+    { r: 0, c: 4, walls: wallCount, goalRow: 8, inventory: [], effects: [] },
+    { r: 8, c: 4, walls: wallCount, goalRow: 0, inventory: [], effects: [] },
+  ];
+  if (playerCount >= 3) players.push({ r: 4, c: 0, walls: wallCount, goalCol: 8, inventory: [], effects: [] });
+  if (playerCount >= 4) players.push({ r: 4, c: 8, walls: wallCount, goalCol: 0, inventory: [], effects: [] });
+
   const state: GameState = {
-    players: [
-      { r: 0, c: 4, walls: 10, goalRow: 8, inventory: [], effects: [] },
-      { r: 8, c: 4, walls: 10, goalRow: 0, inventory: [], effects: [] }
-    ],
+    players,
     walls: [],
     turn: 0,
     gameOver: false,
     lastMoveTime: Date.now(),
-    treasureMode
+    treasureMode,
+    playerCount,
   };
 
   if (treasureMode) {
     state.treasures = [];
     while (state.treasures.length < 4) {
-      const r = Math.floor(Math.random() * 7) + 1; // Avoid start rows 0 and 8
+      const r = Math.floor(Math.random() * 7) + 1;
       const c = Math.floor(Math.random() * 9);
       if (!state.treasures.some(t => t.r === r && t.c === c)) {
         state.treasures.push({ r, c });
@@ -86,10 +101,9 @@ export function isBlocked(s: GameState, r1: number, c1: number, r2: number, c2: 
 
 export function getValidMoves(s: GameState, pi: number) {
   const p = s.players[pi];
-  const o = s.players[1 - pi];
+  const others = s.players.filter((_, i) => i !== pi);
   const mv: { r: number; c: number }[] = [];
   const ds = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-
   const hasMole = p.effects?.some(e => e.type === 'MOLE' && e.duration > 0) || false;
 
   for (const [dr, dc] of ds) {
@@ -97,15 +111,23 @@ export function getValidMoves(s: GameState, pi: number) {
     if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9) continue;
     if (isBlocked(s, p.r, p.c, nr, nc, hasMole)) continue;
 
-    if (nr === o.r && nc === o.c) {
+    const occupied = others.some(o => o.r === nr && o.c === nc);
+    if (occupied) {
+      // Try straight jump
       const jr = nr + dr, jc = nc + dc;
-      if (jr >= 0 && jr < 9 && jc >= 0 && jc < 9 && !isBlocked(s, nr, nc, jr, jc, hasMole)) {
+      if (jr >= 0 && jr < 9 && jc >= 0 && jc < 9
+          && !isBlocked(s, nr, nc, jr, jc, hasMole)
+          && !others.some(o => o.r === jr && o.c === jc)) {
         mv.push({ r: jr, c: jc });
       } else {
+        // Sidestep
         const sd = dr === 0 ? [[-1, 0], [1, 0]] : [[0, -1], [0, 1]];
         for (const [sdr, sdc] of sd) {
           const sr = nr + sdr, sc = nc + sdc;
-          if (sr >= 0 && sr < 9 && sc >= 0 && sc < 9 && !isBlocked(s, nr, nc, sr, sc, hasMole) && !(sr === p.r && sc === p.c)) {
+          if (sr >= 0 && sr < 9 && sc >= 0 && sc < 9
+              && !isBlocked(s, nr, nc, sr, sc, hasMole)
+              && !others.some(o => o.r === sr && o.c === sc)
+              && !(sr === p.r && sc === p.c)) {
             mv.push({ r: sr, c: sc });
           }
         }
@@ -126,8 +148,8 @@ export function wallsOverlap(a: Wall, b: Wall) {
 
 export function cloneS(s: GameState): GameState {
   return {
-    players: s.players.map(p => ({ 
-      ...p, 
+    players: s.players.map(p => ({
+      ...p,
       inventory: p.inventory ? [...p.inventory] : [],
       effects: p.effects ? p.effects.map(e => ({ ...e })) : []
     })),
@@ -136,6 +158,7 @@ export function cloneS(s: GameState): GameState {
     gameOver: s.gameOver,
     lastMoveTime: s.lastMoveTime,
     treasureMode: s.treasureMode,
+    playerCount: s.playerCount,
     treasures: s.treasures ? s.treasures.map(t => ({ ...t })) : undefined,
     traps: s.traps ? s.traps.map(t => ({ ...t })) : undefined
   };
@@ -143,7 +166,6 @@ export function cloneS(s: GameState): GameState {
 
 export function bfsDist(s: GameState, pi: number) {
   const p = s.players[pi];
-  const gr = p.goalRow;
   const vis = new Set<number>();
   const q = [{ r: p.r, c: p.c, d: 0 }];
   vis.add(p.r * 9 + p.c);
@@ -151,7 +173,8 @@ export function bfsDist(s: GameState, pi: number) {
 
   while (q.length) {
     const { r, c, d } = q.shift()!;
-    if (r === gr) return d;
+    if ((p.goalRow !== undefined && r === p.goalRow) ||
+        (p.goalCol !== undefined && c === p.goalCol)) return d;
     for (const [dr, dc] of ds) {
       const nr = r + dr, nc = c + dc;
       if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9 || vis.has(nr * 9 + nc) || isBlocked(s, r, c, nr, nc)) continue;
@@ -165,24 +188,18 @@ export function bfsDist(s: GameState, pi: number) {
 export function applySkill(s: GameState, skill: SkillType, target?: { r: number, c: number }): GameState {
   const ns = cloneS(s);
   const p = ns.players[ns.turn];
-  const o = ns.players[1 - ns.turn];
+  const o = ns.players[1 - Math.min(ns.turn, 1)]; // opponent = player 1 in 2-player, player 1 otherwise
 
-  // Remove skill from inventory
   if (p.inventory) {
     const idx = p.inventory.indexOf(skill);
     if (idx !== -1) p.inventory.splice(idx, 1);
   }
-
-  // Ensure effects arrays exist
   if (!p.effects) p.effects = [];
   if (!o.effects) o.effects = [];
 
   switch (skill) {
     case 'TELEPORT':
-      if (target) {
-        p.r = target.r;
-        p.c = target.c;
-      }
+      if (target) { p.r = target.r; p.c = target.c; }
       break;
     case 'HAMMER':
       if (target) {
@@ -198,13 +215,9 @@ export function applySkill(s: GameState, skill: SkillType, target?: { r: number,
       break;
     case 'DYNAMITE':
       if (target) {
-        // Remove all walls touching intersection (target.r, target.c)
         ns.walls = ns.walls.filter(w => {
-          if (w.orient === 'h') {
-            return !(w.r === target.r && (w.c === target.c || w.c === target.c - 1));
-          } else {
-            return !(w.c === target.c && (w.r === target.r || w.r === target.r - 1));
-          }
+          if (w.orient === 'h') return !(w.r === target.r && (w.c === target.c || w.c === target.c - 1));
+          else return !(w.c === target.c && (w.r === target.r || w.r === target.r - 1));
         });
       }
       break;
@@ -214,53 +227,42 @@ export function applySkill(s: GameState, skill: SkillType, target?: { r: number,
     case 'WALLS':
       p.walls += 2;
       break;
-    case 'MAGNET':
-      // Move opponent 2 cells closer
-      const dr = p.r - o.r;
-      const dc = p.c - o.c;
-      if (Math.abs(dr) > Math.abs(dc)) {
-        o.r += Math.sign(dr) * Math.min(2, Math.abs(dr) - 1);
-      } else {
-        o.c += Math.sign(dc) * Math.min(2, Math.abs(dc) - 1);
-      }
+    case 'MAGNET': {
+      const dr = p.r - o.r, dc = p.c - o.c;
+      if (Math.abs(dr) > Math.abs(dc)) o.r += Math.sign(dr) * Math.min(2, Math.abs(dr) - 1);
+      else o.c += Math.sign(dc) * Math.min(2, Math.abs(dc) - 1);
       break;
+    }
     case 'TRAP':
       if (!ns.traps) ns.traps = [];
       ns.traps.push({ r: p.r, c: p.c, owner: ns.turn });
       break;
-    case 'SWAP':
+    case 'SWAP': {
       const tempR = p.r, tempC = p.c;
       p.r = o.r; p.c = o.c;
       o.r = tempR; o.c = tempC;
       break;
+    }
   }
-
   return ns;
 }
 
 export function advanceTurn(state: GameState) {
-  state.turn = 1 - state.turn;
-  
-  // Decrement effects for the new current player
+  const n = state.players.length;
+  state.turn = (state.turn + 1) % n;
+
   const p = state.players[state.turn];
   if (p.effects) {
-    p.effects.forEach(e => {
-      if (e.duration > 0) e.duration--;
-    });
+    p.effects.forEach(e => { if (e.duration > 0) e.duration--; });
     p.effects = p.effects.filter(e => e.duration > 0);
   }
 
-  // Check if skipped
   if (p.effects?.some(e => e.type === 'SKIP')) {
     p.effects = p.effects.filter(e => e.type !== 'SKIP');
-    state.turn = 1 - state.turn;
-    
-    // Decrement effects for the next player too
+    state.turn = (state.turn + 1) % n;
     const p2 = state.players[state.turn];
     if (p2.effects) {
-      p2.effects.forEach(e => {
-        if (e.duration > 0) e.duration--;
-      });
+      p2.effects.forEach(e => { if (e.duration > 0) e.duration--; });
       p2.effects = p2.effects.filter(e => e.duration > 0);
     }
   }
@@ -272,26 +274,28 @@ export function isValidWall(s: GameState, wr: number, wc: number, o: 'h' | 'v') 
   const nw: Wall = { r: wr, c: wc, orient: o };
   for (const w of s.walls) if (wallsOverlap(w, nw)) return false;
 
-  const opponent = s.players[1 - s.turn];
-  const hasShield = opponent.effects?.some(e => e.type === 'SHIELD' && e.duration > 0) || false;
-  if (hasShield && o === 'h') {
-    // Cannot place horizontal wall directly in front of shielded opponent
-    if (1 - s.turn === 0) { // Opponent is Player 0, moving down
-      if (wr === opponent.r && (wc === opponent.c || wc === opponent.c - 1)) return false;
-    } else { // Opponent is Player 1, moving up
-      if (wr === opponent.r - 1 && (wc === opponent.c || wc === opponent.c - 1)) return false;
+  // Shield check (2-player only)
+  if (s.players.length === 2) {
+    const opp = s.players[1 - s.turn];
+    const hasShield = opp.effects?.some(e => e.type === 'SHIELD' && e.duration > 0) || false;
+    if (hasShield && o === 'h') {
+      if (1 - s.turn === 0) {
+        if (wr === opp.r && (wc === opp.c || wc === opp.c - 1)) return false;
+      } else {
+        if (wr === opp.r - 1 && (wc === opp.c || wc === opp.c - 1)) return false;
+      }
     }
   }
 
   const ts = cloneS(s);
   ts.walls.push(nw);
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < s.players.length; i++) {
     if (bfsDist(ts, i) === Infinity) return false;
   }
   return true;
 }
 
-// AI Logic
+// AI Logic (2-player only)
 export function getWC(s: GameState, ai: number) {
   const opp = s.players[1 - ai];
   const cd: Wall[] = [];
@@ -321,7 +325,6 @@ export function getWC(s: GameState, ai: number) {
 
 export function bfsPath(s: GameState, pi: number) {
   const p = s.players[pi];
-  const gr = p.goalRow;
   const vis = new Map<number, { r: number, c: number } | null>();
   const q = [{ r: p.r, c: p.c }];
   vis.set(p.r * 9 + p.c, null);
@@ -329,13 +332,11 @@ export function bfsPath(s: GameState, pi: number) {
 
   while (q.length) {
     const { r, c } = q.shift()!;
-    if (r === gr) {
+    if ((p.goalRow !== undefined && r === p.goalRow) ||
+        (p.goalCol !== undefined && c === p.goalCol)) {
       const path = [];
       let cur: { r: number, c: number } | null | undefined = { r, c };
-      while (cur) {
-        path.unshift(cur);
-        cur = vis.get(cur.r * 9 + cur.c);
-      }
+      while (cur) { path.unshift(cur); cur = vis.get(cur.r * 9 + cur.c); }
       return path;
     }
     for (const [dr, dc] of ds) {
@@ -353,8 +354,8 @@ export function ev(s: GameState) {
 }
 
 export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number): number {
-  if (s.players[1].r === s.players[1].goalRow) return 1000;
-  if (s.players[0].r === s.players[0].goalRow) return -1000;
+  if (hasWon(s.players[1])) return 1000;
+  if (hasWon(s.players[0])) return -1000;
   if (d === 0) return ev(s);
 
   const pi = isMax ? 1 : 0;
@@ -363,21 +364,17 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
   if (isMax) {
     let best = -Infinity;
     for (const m of mv) {
-      const ns = cloneS(s);
-      ns.players[pi].r = m.r; ns.players[pi].c = m.c; ns.turn = 1 - pi;
+      const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c; ns.turn = 1 - pi;
       best = Math.max(best, mm(ns, d - 1, false, a, b));
-      a = Math.max(a, best);
-      if (b <= a) break;
+      a = Math.max(a, best); if (b <= a) break;
     }
     return best;
   } else {
     let best = Infinity;
     for (const m of mv) {
-      const ns = cloneS(s);
-      ns.players[pi].r = m.r; ns.players[pi].c = m.c; ns.turn = 1 - pi;
+      const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c; ns.turn = 1 - pi;
       best = Math.min(best, mm(ns, d - 1, true, a, b));
-      b = Math.min(b, best);
-      if (b <= a) break;
+      b = Math.min(b, best); if (b <= a) break;
     }
     return best;
   }
@@ -386,14 +383,12 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
 export type AIMove = { type: 'move', r: number, c: number } | { type: 'wall', r: number, c: number, orient: 'h' | 'v' };
 
 export function mmRoot(s: GameState, d: number): AIMove {
-  let bs = -Infinity;
-  let ba: AIMove | null = null;
+  let bs = -Infinity, ba: AIMove | null = null;
   const mv = getValidMoves(s, 1);
 
   for (const m of mv) {
-    const ns = cloneS(s);
-    ns.players[1].r = m.r; ns.players[1].c = m.c;
-    if (m.r === ns.players[1].goalRow) return { type: 'move', r: m.r, c: m.c };
+    const ns = cloneS(s); ns.players[1].r = m.r; ns.players[1].c = m.c;
+    if (hasWon(ns.players[1])) return { type: 'move', r: m.r, c: m.c };
     ns.turn = 0;
     const sc = mm(ns, d - 1, false, -Infinity, Infinity);
     if (sc > bs) { bs = sc; ba = { type: 'move', r: m.r, c: m.c }; }
@@ -402,8 +397,7 @@ export function mmRoot(s: GameState, d: number): AIMove {
   if (s.players[1].walls > 0) {
     for (const w of getWC(s, 1)) {
       if (!isValidWall(s, w.r, w.c, w.orient)) continue;
-      const ns = cloneS(s);
-      ns.walls.push(w); ns.players[1].walls--; ns.turn = 0;
+      const ns = cloneS(s); ns.walls.push(w); ns.players[1].walls--; ns.turn = 0;
       const sc = mm(ns, d - 1, false, -Infinity, Infinity);
       if (sc > bs) { bs = sc; ba = { type: 'wall', r: w.r, c: w.c, orient: w.orient }; }
     }

@@ -42,6 +42,7 @@ export default function App() {
   const [onlineRole, setOnlineRole] = useState(0);
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [hostedGameData, setHostedGameData] = useState<any | null>(null);
+  const [botSlots, setBotSlots] = useState<number[]>([]);
   const [waitingGames, setWaitingGames] = useState<any[]>([]);
   const [opponent, setOpponent] = useState<Profile | null>(null);
   const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
@@ -188,18 +189,34 @@ export default function App() {
     return () => { clearInterval(interval); supabase.removeChannel(channel); };
   }, [view, session]);
 
-  // Auto-start timer: host only, fires after 2 minutes if >= 2 players joined
+  // Auto-start timer: host only, fires after 2 minutes if >= 2 slots filled (humans + bots)
   useEffect(() => {
     if (!onlineGameId || onlineRole !== 0) return;
     const AUTO_START_MS = 2 * 60 * 1000;
     const timer = setTimeout(async () => {
       const g = hostedGameDataRef.current;
       if (!g) return;
-      const filled = [g.player1_id, g.player2_id, g.player3_id, g.player4_id].filter(Boolean).length;
-      if (filled >= 2) await startOnlineGame(onlineGameId);
+      const humanFilled = [g.player1_id, g.player2_id, g.player3_id, g.player4_id].filter(Boolean).length;
+      const totalFilled = humanFilled + botSlots.length;
+      if (totalFilled >= 2) await handleStartOnlineGame();
     }, AUTO_START_MS);
     return () => clearTimeout(timer);
   }, [onlineGameId, onlineRole]);
+
+  // Bot AI effect: host drives bot players in online multiplayer
+  useEffect(() => {
+    if (view !== 'game' || !isOnlineMode(mode) || onlineRole !== 0 || gameState.gameOver || animating) return;
+    if (!gameState.botPlayers?.includes(gameState.turn)) return;
+    setStatusMsg('Bot gondolkodik...');
+    const depth = 2;
+    const timer = setTimeout(() => {
+      const move = mmRoot(gameState, depth);
+      setStatusMsg('');
+      if (move.type === 'move') executeMove(move.r, move.c);
+      else executeWall(move.r, move.c, move.orient);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [view, mode, gameState, animating, onlineRole]);
 
   useEffect(() => {
     if (view !== 'game' || !isAIMode(mode) || gameState.turn !== 1 || gameState.gameOver || animating) return;
@@ -234,7 +251,7 @@ export default function App() {
     setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null);
     if (difficulty) setAiDifficulty(difficulty);
     if (isOnlineMode(selectedMode)) {
-      setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setOpponent(null); return;
+      setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setOpponent(null); setBotSlots([]); setHostedGameData(null); return;
     }
     setMode(selectedMode);
     setGameState(initState(isTreasureMode(selectedMode)));
@@ -359,7 +376,9 @@ export default function App() {
 
   const handleStartOnlineGame = async () => {
     if (!onlineGameId || onlineRole !== 0) return;
-    await startOnlineGame(onlineGameId);
+    // Embed bot player indices into game state, then flip status to playing
+    const stateWithBots = { ...gameState, botPlayers: botSlots.length > 0 ? botSlots : undefined };
+    await updateGameState(onlineGameId, stateWithBots, 'playing');
   };
 
   if (authLoading) {
@@ -421,7 +440,7 @@ export default function App() {
             <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} />
           )}
           {view === 'lobby' && (
-            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} onBack={() => { setOnlineGameId(null); setHostedGameData(null); setView('menu'); }} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
+            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={() => { setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setView('menu'); }} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
             <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} opponent={opponent} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); setView('menu'); }} />
