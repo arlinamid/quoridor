@@ -93,12 +93,12 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
     
     if (targetingSkill === 'TELEPORT') {
       if (onSkillTarget) {
-        // Check distance <= 3 and empty cell
+        // Check distance <= 2 and empty cell
         const p = state.players[state.turn];
         const o = state.players[1 - state.turn];
         const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
         const isEmpty = !(r === o.r && c === o.c);
-        if (dist <= 3 && dist > 0 && isEmpty) {
+        if (dist <= 2 && dist > 0 && isEmpty) {
           onSkillTarget(r, c);
         }
       }
@@ -132,7 +132,7 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
             const o = state.players[1 - state.turn];
             const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
             const isEmpty = !(r === o.r && c === o.c);
-            if (dist <= 3 && dist > 0 && isEmpty) isTeleportTarget = true;
+            if (dist <= 2 && dist > 0 && isEmpty) isTeleportTarget = true;
           }
           
           const hasTreasure = state.treasureMode && state.treasures?.some(t => t.r === r && t.c === c);
