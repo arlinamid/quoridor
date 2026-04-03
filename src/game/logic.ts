@@ -56,8 +56,9 @@ export function initState(treasureMode = false, playerCount = 2): GameState {
   };
 
   if (treasureMode) {
+    const treasureCount = playerCount * 2; // 4 / 6 / 8 for 2/3/4 players
     state.treasures = [];
-    while (state.treasures.length < 4) {
+    while (state.treasures.length < treasureCount) {
       const r = Math.floor(Math.random() * 7) + 1;
       const c = Math.floor(Math.random() * 9);
       if (!state.treasures.some(t => t.r === r && t.c === c)) {

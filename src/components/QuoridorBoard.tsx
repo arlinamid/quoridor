@@ -17,6 +17,23 @@ interface BoardProps {
 }
 
 export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget }: BoardProps) {
+  const n = state.playerCount ?? state.players.length;
+  // Larger cells for 3-4 player games so the board stays readable
+  const cellCls = n >= 3
+    ? "w-[clamp(36px,7.5vw,64px)] h-[clamp(36px,7.5vw,64px)]"
+    : "w-[clamp(28px,6vw,48px)] h-[clamp(28px,6vw,48px)]";
+  const gapHCls = n >= 3
+    ? "w-[clamp(36px,7.5vw,64px)] h-[clamp(7px,1.8vw,10px)]"
+    : "w-[clamp(28px,6vw,48px)] h-[clamp(6px,1.5vw,8px)]";
+  const gapVCls = n >= 3
+    ? "w-[clamp(7px,1.8vw,10px)] h-[clamp(36px,7.5vw,64px)]"
+    : "w-[clamp(6px,1.5vw,8px)] h-[clamp(28px,6vw,48px)]";
+  const gapBothCls = n >= 3
+    ? "w-[clamp(7px,1.8vw,10px)] h-[clamp(7px,1.8vw,10px)]"
+    : "w-[clamp(6px,1.5vw,8px)] h-[clamp(6px,1.5vw,8px)]";
+  const pawnCls = n >= 3
+    ? "w-[clamp(26px,5.5vw,44px)] h-[clamp(26px,5.5vw,44px)]"
+    : "w-[clamp(20px,4.5vw,32px)] h-[clamp(20px,4.5vw,32px)]";
   const [hoveredWall, setHoveredWall] = useState<Wall | null>(null);
 
   const validMoves = useMemo(() => {
@@ -126,7 +143,7 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
           const r = vr / 2;
           const c = vc / 2;
           const isValidMove = validMoves.some(m => m.r === r && m.c === c);
-          
+
           let isTeleportTarget = false;
           if (targetingSkill === 'TELEPORT') {
             const p = state.players[state.turn];
@@ -135,15 +152,15 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
             const isEmpty = !(r === o.r && c === o.c);
             if (dist <= 2 && dist > 0 && isEmpty) isTeleportTarget = true;
           }
-          
+
           const hasTreasure = state.treasureMode && state.treasures?.some(t => t.r === r && t.c === c);
           const hasTrap = state.treasureMode && state.traps?.some(t => t.r === r && t.c === c);
-          
+
           cells.push(
             <div
               key={key}
               className={cn(
-                "w-[clamp(28px,6vw,48px)] h-[clamp(28px,6vw,48px)] bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center",
+                cellCls, "bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center",
                 r === 8 && "shadow-[inset_0_-3px_0_#e74c3c]",
                 r === 0 && "shadow-[inset_0_3px_0_#2c3e50]",
                 c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
@@ -165,9 +182,9 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
         } else {
           // Gap
           let typeClass = "";
-          if (!isR && isC) typeClass = "w-[clamp(28px,6vw,48px)] h-[clamp(6px,1.5vw,8px)]";
-          else if (isR && !isC) typeClass = "w-[clamp(6px,1.5vw,8px)] h-[clamp(28px,6vw,48px)]";
-          else typeClass = "w-[clamp(6px,1.5vw,8px)] h-[clamp(6px,1.5vw,8px)]";
+          if (!isR && isC) typeClass = gapHCls;
+          else if (isR && !isC) typeClass = gapVCls;
+          else typeClass = gapBothCls;
 
           let isTarget = false;
           if (targetingSkill === 'HAMMER' && isPlaced) isTarget = true;
@@ -207,7 +224,7 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
             return (
               <motion.div
                 key={`pawn-${i}`}
-                className="w-[clamp(20px,4.5vw,32px)] h-[clamp(20px,4.5vw,32px)] rounded-full z-20 pointer-events-none"
+                className={cn(pawnCls, "rounded-full z-20 pointer-events-none")}
                 layout
                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
                 style={{
