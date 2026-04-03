@@ -56,10 +56,13 @@ export default function App() {
   const showWinRef = useRef(showWin);
   const hostedGameDataRef = useRef(hostedGameData);
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [connectedUserIds, setConnectedUserIds] = useState<Set<string>>(new Set());
+  const connectedUserIdsRef = useRef(connectedUserIds);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { showWinRef.current = showWin; }, [showWin]);
   useEffect(() => { hostedGameDataRef.current = hostedGameData; }, [hostedGameData]);
+  useEffect(() => { connectedUserIdsRef.current = connectedUserIds; }, [connectedUserIds]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
@@ -173,6 +176,7 @@ export default function App() {
         }
       })
       .on('presence', { event: 'join' }, ({ key }) => {
+        setConnectedUserIds(prev => new Set([...prev, key]));
         if (key !== session.user.id && disconnectTimerRef.current) {
           clearTimeout(disconnectTimerRef.current);
           disconnectTimerRef.current = null;
@@ -181,6 +185,7 @@ export default function App() {
         }
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
+        setConnectedUserIds(prev => { const next = new Set(prev); next.delete(key); return next; });
         if (key !== session.user.id && viewRef.current === 'game') {
           setStatusMsg('Ellenfél kapcsolata megszakadt — 2 perc várakozás...');
           disconnectTimerRef.current = setTimeout(() => {
@@ -192,7 +197,13 @@ export default function App() {
           }, 2 * 60 * 1000);
         }
       })
-      .subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString() }); });
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ online_at: new Date().toISOString() });
+          // Seed connected set from current presence state
+          setConnectedUserIds(new Set(Object.keys(channel.presenceState())));
+        }
+      });
     return () => { supabase.removeChannel(channel); };
   }, [mode, onlineGameId, session, onlineRole, handleWin]);
 
@@ -225,17 +236,28 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [onlineGameId, onlineRole]);
 
-  // Bot AI effect: lowest-indexed human player drives bots.
-  // If host (role 0) leaves, role 1 automatically becomes the controller.
+  // Bot AI effect: lowest-indexed *connected* human drives bots.
+  // When host (role 0) disconnects, role 1 takes over automatically.
   useEffect(() => {
     if (view !== 'game' || !isOnlineMode(mode) || gameState.gameOver || animating) return;
     const botPi = gameState.turn;
     if (!gameState.botPlayers?.includes(botPi)) return;
-    // Determine controller: human slot with the lowest index
     const n = gameState.players.length;
     const botSet = new Set(gameState.botPlayers ?? []);
     const humanRoles = Array.from({ length: n }, (_, i) => i).filter(i => !botSet.has(i));
-    const controllerRole = humanRoles.length > 0 ? Math.min(...humanRoles) : 0;
+    // Build role→userId mapping from the game row so we can check presence
+    const g = hostedGameDataRef.current;
+    const roleToUserId: Record<number, string> = {};
+    if (g) {
+      [g.player1_id, g.player2_id, g.player3_id, g.player4_id].forEach((uid: string | null, i: number) => {
+        if (uid) roleToUserId[i] = uid;
+      });
+    }
+    const connected = connectedUserIdsRef.current;
+    const connectedHumanRoles = humanRoles.filter(r => roleToUserId[r] && connected.has(roleToUserId[r]));
+    // Fall back to all human roles if presence info not yet available
+    const effectiveRoles = connectedHumanRoles.length > 0 ? connectedHumanRoles : humanRoles;
+    const controllerRole = effectiveRoles.length > 0 ? Math.min(...effectiveRoles) : 0;
     if (onlineRole !== controllerRole) return;
     setStatusMsg('Bot gondolkodik...');
     const timer = setTimeout(() => {
@@ -245,7 +267,7 @@ export default function App() {
       else executeWall(move.r, move.c, move.orient);
     }, 600);
     return () => clearTimeout(timer);
-  }, [view, mode, gameState, animating, onlineRole]);
+  }, [view, mode, gameState, animating, onlineRole, connectedUserIds]);
 
   useEffect(() => {
     if (view !== 'game' || !isAIMode(mode) || gameState.turn !== 1 || gameState.gameOver || animating) return;
