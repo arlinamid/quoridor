@@ -17,6 +17,8 @@ type GameMode = 'pvp' | 'ai' | 'online';
 export default function App() {
   const [view, setView] = useState<View>('auth');
   const [mode, setMode] = useState<GameMode>('pvp');
+  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [showAiDifficulty, setShowAiDifficulty] = useState(false);
   const [gameState, setGameState] = useState<GameState>(initState());
   const [wallMode, setWallMode] = useState(false);
   const [wallOrient, setWallOrient] = useState<'h' | 'v'>('h');
@@ -383,7 +385,8 @@ export default function App() {
     if (view === 'game' && mode === 'ai' && gameState.turn === 1 && !gameState.gameOver && !animating) {
       setStatusMsg('A gép gondolkodik...');
       const timer = setTimeout(() => {
-        const move = mmRoot(gameState, 2);
+        const depth = aiDifficulty === 'easy' ? 1 : (aiDifficulty === 'medium' ? 2 : 3);
+        const move = mmRoot(gameState, depth);
         setStatusMsg('');
         if (move.type === 'move') {
           executeMove(move.r, move.c);
@@ -393,7 +396,7 @@ export default function App() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [view, mode, gameState, animating, executeMove, executeWall]);
+  }, [view, mode, gameState, animating, executeMove, executeWall, aiDifficulty]);
 
   // Timeout Handling
   useEffect(() => {
@@ -555,42 +558,77 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-4 w-full">
-                <button 
-                  onClick={() => startGame('pvp')}
-                  className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <span className="relative flex items-center justify-center gap-3">
-                    <User size={18} /> 1 vs 1 <User size={18} />
-                  </span>
-                </button>
-                <button 
-                  onClick={() => startGame('ai')}
-                  className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <span className="relative flex items-center justify-center gap-3">
-                    <User size={18} /> 1 vs Gép <Cpu size={18} />
-                  </span>
-                </button>
-                <button 
-                  onClick={() => startGame('online')}
-                  className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <span className="relative flex items-center justify-center gap-3">
-                    <Globe size={18} /> Online Multiplayer <Globe size={18} />
-                  </span>
-                </button>
-                <button 
-                  onClick={() => setView('rules')}
-                  className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <span className="relative flex items-center justify-center gap-3">
-                    <BookOpen size={18} /> Szabályok <BookOpen size={18} />
-                  </span>
-                </button>
+                {!showAiDifficulty ? (
+                  <>
+                    <button 
+                      onClick={() => startGame('pvp')}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">
+                        <User size={18} /> 1 vs 1 <User size={18} />
+                      </span>
+                    </button>
+                    <button 
+                      onClick={() => setShowAiDifficulty(true)}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">
+                        <User size={18} /> 1 vs Gép <Cpu size={18} />
+                      </span>
+                    </button>
+                    <button 
+                      onClick={() => startGame('online')}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">
+                        <Globe size={18} /> Online Multiplayer <Globe size={18} />
+                      </span>
+                    </button>
+                    <button 
+                      onClick={() => setView('rules')}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">
+                        <BookOpen size={18} /> Szabályok <BookOpen size={18} />
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-[#f0c866] font-['Cinzel',serif] text-xl text-center mb-2 tracking-widest uppercase">Nehézségi Fokozat</h3>
+                    <button 
+                      onClick={() => { setAiDifficulty('easy'); setShowAiDifficulty(false); startGame('ai'); }}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">Könnyű</span>
+                    </button>
+                    <button 
+                      onClick={() => { setAiDifficulty('medium'); setShowAiDifficulty(false); startGame('ai'); }}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">Közepes</span>
+                    </button>
+                    <button 
+                      onClick={() => { setAiDifficulty('hard'); setShowAiDifficulty(false); startGame('ai'); }}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">Nehéz</span>
+                    </button>
+                    <button 
+                      onClick={() => setShowAiDifficulty(false)}
+                      className="mt-4 text-[#a89078] hover:text-[#f0c866] transition-colors uppercase tracking-wider text-sm flex items-center justify-center gap-2"
+                    >
+                      <ArrowLeft size={16} /> Vissza
+                    </button>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
