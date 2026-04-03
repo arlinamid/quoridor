@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
-import { GameState, initState, mmRoot, SkillType, cloneS, applySkill, advanceTurn } from './game/logic';
+import { GameState, initState, mmRoot, SkillType, cloneS, applySkill, advanceTurn, hasWon } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile,
-  createGame, joinGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
+  createGame, joinGame, startOnlineGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -40,6 +40,8 @@ export default function App() {
 
   const [onlineGameId, setOnlineGameId] = useState<string | null>(null);
   const [onlineRole, setOnlineRole] = useState(0);
+  const [maxPlayers, setMaxPlayers] = useState(2);
+  const [hostedGameData, setHostedGameData] = useState<any | null>(null);
   const [waitingGames, setWaitingGames] = useState<any[]>([]);
   const [opponent, setOpponent] = useState<Profile | null>(null);
   const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
@@ -50,9 +52,11 @@ export default function App() {
   const gameStateRef = useRef(gameState);
   const viewRef = useRef(view);
   const showWinRef = useRef(showWin);
+  const hostedGameDataRef = useRef(hostedGameData);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { showWinRef.current = showWin; }, [showWin]);
+  useEffect(() => { hostedGameDataRef.current = hostedGameData; }, [hostedGameData]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
@@ -135,13 +139,24 @@ export default function App() {
     channel
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${onlineGameId}` }, async (payload) => {
         const g = payload.new;
-        setGameState(g.state);
+        // Always update hosted game data so slot UI stays current
+        setHostedGameData(g);
         if (g.status === 'playing' && viewRef.current === 'lobby') {
-          if (g.player2_id) { const opp = await getDbProfile(g.player2_id); if (opp) setOpponent(opp); }
+          // Load first available opponent profile
+          const opponentIds = [g.player2_id, g.player3_id, g.player4_id].filter(Boolean);
+          if (opponentIds.length > 0) {
+            const opp = await getDbProfile(opponentIds[0]);
+            if (opp) setOpponent(opp);
+          }
+          setGameState(g.state);
           setView('game');
+        } else if (g.status === 'playing' || g.status === 'waiting') {
+          // Non-lobby update: just sync state
+          if (g.state && viewRef.current === 'game') setGameState(g.state);
         }
         if (g.status === 'finished' && !showWinRef.current) {
-          handleWin(g.winner_id === session.user.id ? onlineRole : 1 - onlineRole, true);
+          const isWinner = g.winner_id === session.user.id;
+          handleWin(isWinner ? onlineRole : (onlineRole === 0 ? 1 : 0), true);
         }
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
@@ -172,6 +187,19 @@ export default function App() {
     const interval = setInterval(fetchGames, 5000);
     return () => { clearInterval(interval); supabase.removeChannel(channel); };
   }, [view, session]);
+
+  // Auto-start timer: host only, fires after 2 minutes if >= 2 players joined
+  useEffect(() => {
+    if (!onlineGameId || onlineRole !== 0) return;
+    const AUTO_START_MS = 2 * 60 * 1000;
+    const timer = setTimeout(async () => {
+      const g = hostedGameDataRef.current;
+      if (!g) return;
+      const filled = [g.player1_id, g.player2_id, g.player3_id, g.player4_id].filter(Boolean).length;
+      if (filled >= 2) await startOnlineGame(onlineGameId);
+    }, AUTO_START_MS);
+    return () => clearTimeout(timer);
+  }, [onlineGameId, onlineRole]);
 
   useEffect(() => {
     if (view !== 'game' || !isAIMode(mode) || gameState.turn !== 1 || gameState.gameOver || animating) return;
@@ -228,7 +256,7 @@ export default function App() {
         next.players[prev.turn].c = 4;
         setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
       }
-      const isWin = next.players[prev.turn].r === next.players[prev.turn].goalRow;
+      const isWin = hasWon(next.players[prev.turn]);
       if (!isWin) advanceTurn(next);
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
       if (isWin) setTimeout(() => handleWin(prev.turn), 400);
@@ -286,7 +314,7 @@ export default function App() {
         const oi = next.traps?.findIndex(t => t.r === o.r && t.c === o.c && t.owner !== (1 - prev.turn));
         if (oi !== undefined && oi !== -1) { next.traps!.splice(oi, 1); o.r = (1 - prev.turn) === 0 ? 0 : 8; o.c = 4; setStatusMsg('Az ellenfél csapdába lépett!'); }
       }
-      const winnerIdx = next.players.findIndex((p) => p.r === p.goalRow);
+      const winnerIdx = next.players.findIndex((p) => hasWon(p));
       const isWin = winnerIdx !== -1;
       if (!isWin) advanceTurn(next);
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
@@ -300,24 +328,38 @@ export default function App() {
   const handleCreateOnlineGame = async () => {
     if (!session) return;
     setAuthLoading(true);
-    const state = initState(mode === 'treasure-online');
-    const { data, error } = await createGame(session.user.id, state);
+    const state = initState(mode === 'treasure-online', maxPlayers);
+    const { data, error } = await createGame(session.user.id, state, maxPlayers);
     setAuthLoading(false);
-    if (data) { setOnlineGameId(data.id); setOnlineRole(0); setGameState(state); setOpponent(null); }
-    else if (error) alert('Hiba a játék létrehozásakor: ' + error.message);
+    if (data) {
+      setOnlineGameId(data.id);
+      setOnlineRole(0);
+      setGameState(state);
+      setOpponent(null);
+      setHostedGameData(data);
+    } else if (error) alert('Hiba a játék létrehozásakor: ' + error.message);
   };
 
-  const handleJoinOnlineGame = async (gameId: string, state: any, p1Id: string) => {
+  const handleJoinOnlineGame = async (gameId: string, state: any, p1Id: string, slotIndex: 1 | 2 | 3) => {
     if (!session) return;
     if (p1Id === session.user.id) { alert('Nem csatlakozhatsz a saját játékodhoz!'); return; }
     setAuthLoading(true);
-    const { data, error } = await joinGame(gameId, session.user.id, state);
+    const { data, error } = await joinGame(gameId, session.user.id, slotIndex);
     if (data) {
       const opp = await getDbProfile(p1Id);
       if (opp) setOpponent(opp);
-      setOnlineGameId(gameId); setOnlineRole(1); setGameState(state); setView('game');
+      setOnlineGameId(gameId);
+      setOnlineRole(slotIndex);
+      setGameState(state);
+      setHostedGameData(data);
+      // Stay in lobby; subscription will move to game when host starts
     } else if (error) alert('Hiba a csatlakozáskor: ' + error.message);
     setAuthLoading(false);
+  };
+
+  const handleStartOnlineGame = async () => {
+    if (!onlineGameId || onlineRole !== 0) return;
+    await startOnlineGame(onlineGameId);
   };
 
   if (authLoading) {
@@ -379,7 +421,7 @@ export default function App() {
             <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} />
           )}
           {view === 'lobby' && (
-            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} onBack={() => setView('menu')} onCreateGame={handleCreateOnlineGame} onJoinGame={handleJoinOnlineGame} />
+            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} onBack={() => { setOnlineGameId(null); setHostedGameData(null); setView('menu'); }} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
             <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} opponent={opponent} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); setView('menu'); }} />

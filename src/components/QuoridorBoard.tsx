@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { GameState, v2w, isBlocked, getValidMoves, isValidWall, Wall, SkillType } from '../game/logic';
 import { cn } from '../lib/utils';
+import { PLAYER_COLORS } from './views/LobbyView';
 
 interface BoardProps {
   state: GameState;
@@ -143,8 +144,10 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
               key={key}
               className={cn(
                 "w-[clamp(28px,6vw,48px)] h-[clamp(28px,6vw,48px)] bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center",
-                r === 8 && "shadow-[inset_0_-3px_0_var(--p1-color)]",
-                r === 0 && "shadow-[inset_0_3px_0_var(--p2-color)]",
+                r === 8 && "shadow-[inset_0_-3px_0_#e74c3c]",
+                r === 0 && "shadow-[inset_0_3px_0_#2c3e50]",
+                c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
+                c === 0 && "shadow-[inset_3px_0_0_#8e44ad]",
                 isValidMove ? "bg-[rgba(76,175,80,0.4)] cursor-pointer" : 
                 isTeleportTarget ? "bg-[rgba(232,184,48,0.4)] cursor-pointer shadow-[0_0_10px_rgba(232,184,48,0.6)]" : "hover:bg-[#d4a87a] cursor-pointer"
               )}
@@ -199,25 +202,25 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
           {renderGrid()}
           
           {/* Pawns */}
-          {state.players.map((p, i) => (
-            <motion.div
-              key={`pawn-${i}`}
-              className={cn(
-                "w-[clamp(20px,4.5vw,32px)] h-[clamp(20px,4.5vw,32px)] rounded-full z-20 pointer-events-none",
-                i === 0 
-                  ? "bg-[radial-gradient(circle_at_35%_35%,#ff6b5b,#e74c3c,#a82315)] shadow-[0_3px_12px_rgba(231,76,60,0.6),0_0_20px_rgba(231,76,60,0.6)]"
-                  : "bg-[radial-gradient(circle_at_35%_35%,#4a6a8a,#2c3e50,#1a2a3a)] shadow-[0_3px_12px_rgba(44,62,80,0.6),0_0_20px_rgba(44,62,80,0.6)]"
-              )}
-              layout
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              style={{
-                gridRow: p.r * 2 + 1,
-                gridColumn: p.c * 2 + 1,
-                justifySelf: "center",
-                alignSelf: "center"
-              }}
-            />
-          ))}
+          {state.players.map((p, i) => {
+            const color = PLAYER_COLORS[i];
+            return (
+              <motion.div
+                key={`pawn-${i}`}
+                className="w-[clamp(20px,4.5vw,32px)] h-[clamp(20px,4.5vw,32px)] rounded-full z-20 pointer-events-none"
+                layout
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                style={{
+                  gridRow: p.r * 2 + 1,
+                  gridColumn: p.c * 2 + 1,
+                  justifySelf: "center",
+                  alignSelf: "center",
+                  background: `radial-gradient(circle at 35% 35%, ${color}cc, ${color}, ${color}88)`,
+                  boxShadow: `0 3px 12px ${color}99, 0 0 20px ${color}66`,
+                }}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
