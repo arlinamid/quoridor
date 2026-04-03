@@ -1,9 +1,11 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { Bot } from 'lucide-react';
 import { GameState, SkillType } from '../../game/logic';
 import { Profile } from '../../lib/supabase';
 import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/types';
 import { QuoridorBoard } from '../QuoridorBoard';
+import { PLAYER_COLORS, PLAYER_LABELS } from './LobbyView';
 import { cn } from '../../lib/utils';
 
 interface GameViewProps {
@@ -36,15 +38,28 @@ export function GameView({
   onToggleWallMode, onToggleWallOrient, onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
 }: GameViewProps) {
-  const p1Name = isOnlineMode(mode) ? (onlineRole === 0 ? profile.username : opponent?.username || 'Játékos 1') : 'Játékos 1';
-  const p2Name = isAIMode(mode) ? 'Gép (AI)' : isOnlineMode(mode) ? (onlineRole === 1 ? profile.username : opponent?.username || 'Játékos 2') : 'Játékos 2';
+  const playerCount = gameState.players.length;
+  const botPlayers = gameState.botPlayers ?? [];
+
+  const getPlayerName = (pi: number) => {
+    if (botPlayers.includes(pi)) return 'Bot';
+    if (isAIMode(mode) && pi === 1) return 'Gép (AI)';
+    if (isOnlineMode(mode)) {
+      if (pi === onlineRole) return profile.username;
+      if (pi === 0 && onlineRole !== 0) return opponent?.username || PLAYER_LABELS[pi];
+      if (pi === 1 && onlineRole !== 1) return opponent?.username || PLAYER_LABELS[pi];
+    }
+    return `Játékos ${pi + 1}`;
+  };
 
   const canActPlayer = (playerIndex: number) => {
     if (gameState.turn !== playerIndex) return false;
     if (isAIMode(mode) && playerIndex === 1) return false;
-    if (isOnlineMode(mode) && playerIndex !== onlineRole) return false;
+    if (isOnlineMode(mode) && (playerIndex !== onlineRole || botPlayers.includes(playerIndex))) return false;
     return true;
   };
+
+  const isLocalTurn = canActPlayer(gameState.turn);
 
   return (
     <motion.div
@@ -54,35 +69,39 @@ export function GameView({
       exit={{ opacity: 0, scale: 0.95 }}
       className="flex-1 flex flex-col items-center w-full max-w-2xl p-4"
     >
-      {/* Player bars + timer */}
-      <div className="w-full flex justify-between items-center py-4 gap-3">
-        <div className={cn(
-          "flex items-center gap-3 p-2 px-4 rounded-lg bg-[#241810]/90 backdrop-blur-md border flex-1 transition-all",
-          gameState.turn === 0 ? "border-[#f0c866] shadow-[0_0_15px_rgba(240,200,102,0.15)]" : "border-white/5"
-        )}>
-          <div className="w-4 h-4 rounded-full bg-[#e74c3c]" />
-          <div>
-            <div className="font-semibold text-sm">{p1Name}</div>
-            <div className="text-xs text-[#a89078]">Falak: {gameState.players[0].walls}</div>
-          </div>
-        </div>
+      {/* Player cards — dynamic for 2-4 players */}
+      <div className="w-full flex items-center gap-2 py-3 flex-wrap justify-center">
+        {gameState.players.map((p, pi) => {
+          const isActive = gameState.turn === pi;
+          const isBot = botPlayers.includes(pi);
+          return (
+            <div
+              key={pi}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg bg-[#241810]/90 backdrop-blur-md border transition-all",
+                playerCount <= 2 ? "flex-1" : "min-w-[130px]",
+                isActive ? "border-[#f0c866] shadow-[0_0_12px_rgba(240,200,102,0.2)]" : "border-white/5"
+              )}
+              style={isActive ? { borderColor: PLAYER_COLORS[pi] + '88', boxShadow: `0 0 12px ${PLAYER_COLORS[pi]}33` } : {}}
+            >
+              <div className="w-3 h-3 rounded-full shrink-0" style={{ background: PLAYER_COLORS[pi] }} />
+              <div className="min-w-0">
+                <div className="font-semibold text-xs truncate flex items-center gap-1">
+                  {isBot && <Bot size={10} className="text-[#8e44ad] shrink-0" />}
+                  {getPlayerName(pi)}
+                </div>
+                <div className="text-[10px] text-[#a89078]">{PLAYER_LABELS[pi]} · {p.walls} fal</div>
+              </div>
+            </div>
+          );
+        })}
 
-        <div className="font-['Cinzel',serif] text-xs text-[#f0c866] tracking-[2px] text-center shrink-0 flex flex-col items-center gap-1">
-          <span>{gameState.turn === 0 ? '1. JÁTÉKOS' : '2. JÁTÉKOS'}</span>
+        {/* Timer */}
+        <div className="font-['Cinzel',serif] text-xs text-[#f0c866] tracking-[2px] text-center shrink-0 flex flex-col items-center gap-0.5 px-2">
+          <span className="text-[10px] uppercase">{PLAYER_LABELS[gameState.turn]} köre</span>
           <span className={cn("text-lg font-bold font-mono", timeLeft <= 10 ? "text-red-500 animate-pulse" : "text-[#f0c866]")}>
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </span>
-        </div>
-
-        <div className={cn(
-          "flex items-center gap-3 p-2 px-4 rounded-lg bg-[#241810]/90 backdrop-blur-md border flex-1 transition-all flex-row-reverse text-right",
-          gameState.turn === 1 ? "border-[#f0c866] shadow-[0_0_15px_rgba(240,200,102,0.15)]" : "border-white/5"
-        )}>
-          <div className="w-4 h-4 rounded-full bg-[#2c3e50]" />
-          <div>
-            <div className="font-semibold text-sm">{p2Name}</div>
-            <div className="text-xs text-[#a89078]">Falak: {gameState.players[1].walls}</div>
-          </div>
         </div>
       </div>
 
@@ -93,7 +112,10 @@ export function GameView({
         onMove={onMove}
         onWallPlace={onWallPlace}
         animating={animating}
-        disabled={(isAIMode(mode) && gameState.turn === 1) || (isOnlineMode(mode) && gameState.turn !== onlineRole)}
+        disabled={
+          (isAIMode(mode) && gameState.turn === 1) ||
+          (isOnlineMode(mode) && (gameState.turn !== onlineRole || botPlayers.includes(gameState.turn)))
+        }
         targetingSkill={targetingSkill}
         onSkillTarget={onSkillTarget}
       />
@@ -101,7 +123,7 @@ export function GameView({
       {/* Treasure mode: dig + skills */}
       {isTreasureMode(mode) && (
         <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-2">
-          {canActPlayer(gameState.turn) &&
+          {isLocalTurn &&
            gameState.treasures?.some(t => t.r === gameState.players[gameState.turn].r && t.c === gameState.players[gameState.turn].c) && (
             <button
               onClick={onDig}
@@ -111,38 +133,40 @@ export function GameView({
             </button>
           )}
 
-          <div className="flex gap-4 w-full justify-between px-4">
-            {[0, 1].map(pi => (
-              <div key={pi} className={cn("flex flex-col", pi === 1 && "items-end")}>
-                <div className="text-xs text-[#a89078] mb-1">P{pi + 1} Képességek:</div>
-                <div className="flex gap-1">
-                  {gameState.players[pi].inventory?.map((skill, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        if (!canActPlayer(pi)) return;
-                        if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
-                          onSetTargetingSkill(targetingSkill === skill ? null : skill);
-                        } else {
-                          onExecuteSkill(skill);
-                        }
-                      }}
-                      disabled={!canActPlayer(pi)}
-                      className={cn(
-                        "text-xs px-2 py-1 rounded border",
-                        targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
-                        !canActPlayer(pi) && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {isOnlineMode(mode) && onlineRole !== pi ? '???' : skill}
-                    </button>
-                  ))}
-                  {(!gameState.players[pi].inventory || gameState.players[pi].inventory.length === 0) && (
-                    <span className="text-xs text-white/20">-</span>
-                  )}
+          <div className="flex gap-2 flex-wrap justify-center w-full">
+            {gameState.players.map((_, pi) => {
+              const canAct = canActPlayer(pi);
+              const skills = gameState.players[pi].inventory ?? [];
+              if (skills.length === 0) return null;
+              return (
+                <div key={pi} className="flex flex-col items-center gap-1">
+                  <div className="text-[10px] text-[#a89078]">{PLAYER_LABELS[pi]}:</div>
+                  <div className="flex gap-1">
+                    {skills.map((skill, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          if (!canAct) return;
+                          if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
+                            onSetTargetingSkill(targetingSkill === skill ? null : skill);
+                          } else {
+                            onExecuteSkill(skill);
+                          }
+                        }}
+                        disabled={!canAct}
+                        className={cn(
+                          "text-xs px-2 py-1 rounded border",
+                          targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
+                          !canAct && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {isOnlineMode(mode) && pi !== onlineRole ? '???' : skill}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
