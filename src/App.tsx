@@ -12,7 +12,7 @@ import { cn } from './lib/utils';
 import { Session } from '@supabase/supabase-js';
 
 type View = 'auth' | 'menu' | 'game' | 'leaderboard' | 'tos' | 'privacy' | 'lobby' | 'rules';
-type GameMode = 'pvp' | 'ai' | 'online' | 'treasure-pvp';
+type GameMode = 'pvp' | 'ai' | 'online' | 'treasure-pvp' | 'treasure-ai';
 
 export default function App() {
   const [view, setView] = useState<View>('auth');
@@ -151,7 +151,7 @@ export default function App() {
     
     setProfile(p => {
       let newP = { ...p };
-      if (mode === 'ai') {
+      if (mode === 'ai' || mode === 'treasure-ai') {
         if (winnerIndex === 0) {
           newP = { ...p, wins: p.wins + 1, xp: p.xp + 50, level: calculateLevel(p.xp + 50) };
         } else {
@@ -326,7 +326,7 @@ export default function App() {
       return;
     }
     setMode(selectedMode);
-    setGameState(initState(selectedMode === 'treasure-pvp'));
+    setGameState(initState(selectedMode === 'treasure-pvp' || selectedMode === 'treasure-ai'));
     setWallMode(false);
     setWallOrient('h');
     setAnimating(false);
@@ -483,9 +483,31 @@ export default function App() {
 
   // AI Turn Handling
   useEffect(() => {
-    if (view === 'game' && mode === 'ai' && gameState.turn === 1 && !gameState.gameOver && !animating) {
+    if (view === 'game' && (mode === 'ai' || mode === 'treasure-ai') && gameState.turn === 1 && !gameState.gameOver && !animating) {
       setStatusMsg('A gép gondolkodik...');
       const timer = setTimeout(() => {
+        // Simple AI logic for Treasure Mode: Dig if on a treasure and inventory is not full
+        if (gameState.treasureMode) {
+          const p = gameState.players[1];
+          const isOnTreasure = gameState.treasures?.some(t => t.r === p.r && t.c === p.c);
+          if (isOnTreasure && (!p.inventory || p.inventory.length < 2)) {
+            executeDig();
+            setStatusMsg('');
+            return;
+          }
+          
+          // Also, AI could randomly use a skill if it has one
+          if (p.inventory && p.inventory.length > 0 && Math.random() < 0.3) {
+            const skill = p.inventory[Math.floor(Math.random() * p.inventory.length)];
+            // Only use non-targeted skills for simplicity
+            if (!['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
+              executeSkill(skill);
+              setStatusMsg('');
+              return;
+            }
+          }
+        }
+
         const depth = aiDifficulty === 'easy' ? 1 : (aiDifficulty === 'medium' ? 2 : 3);
         const move = mmRoot(gameState, depth);
         setStatusMsg('');
@@ -497,7 +519,7 @@ export default function App() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [view, mode, gameState, animating, executeMove, executeWall, aiDifficulty]);
+  }, [view, mode, gameState, animating, executeMove, executeWall, executeDig, executeSkill, aiDifficulty]);
 
   // Timeout Handling
   useEffect(() => {
@@ -689,6 +711,18 @@ export default function App() {
                       </span>
                     </button>
                     <button 
+                      onClick={() => {
+                        setMode('treasure-ai');
+                        setShowAiDifficulty(true);
+                      }}
+                      className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#e8b830]/50 text-[#e8b830] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#e8b830] hover:shadow-[0_0_40px_rgba(232,184,48,0.3),inset_0_0_30px_rgba(232,184,48,0.1)] hover:-translate-y-0.5"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#e8b830]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <span className="relative flex items-center justify-center gap-3">
+                        <User size={18} /> Kincskereső (vs Gép) <Cpu size={18} />
+                      </span>
+                    </button>
+                    <button 
                       onClick={() => startGame('online')}
                       className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
                     >
@@ -711,21 +745,21 @@ export default function App() {
                   <>
                     <h3 className="text-[#f0c866] font-['Cinzel',serif] text-xl text-center mb-2 tracking-widest uppercase">Nehézségi Fokozat</h3>
                     <button 
-                      onClick={() => { setAiDifficulty('easy'); setShowAiDifficulty(false); startGame('ai'); }}
+                      onClick={() => { setAiDifficulty('easy'); setShowAiDifficulty(false); startGame(mode === 'treasure-ai' ? 'treasure-ai' : 'ai'); }}
                       className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-center gap-3">Könnyű</span>
                     </button>
                     <button 
-                      onClick={() => { setAiDifficulty('medium'); setShowAiDifficulty(false); startGame('ai'); }}
+                      onClick={() => { setAiDifficulty('medium'); setShowAiDifficulty(false); startGame(mode === 'treasure-ai' ? 'treasure-ai' : 'ai'); }}
                       className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-center gap-3">Közepes</span>
                     </button>
                     <button 
-                      onClick={() => { setAiDifficulty('hard'); setShowAiDifficulty(false); startGame('ai'); }}
+                      onClick={() => { setAiDifficulty('hard'); setShowAiDifficulty(false); startGame(mode === 'treasure-ai' ? 'treasure-ai' : 'ai'); }}
                       className="group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-[#f0c866]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -868,7 +902,7 @@ export default function App() {
                 onMove={executeMove}
                 onWallPlace={executeWall}
                 animating={animating}
-                disabled={(mode === 'ai' && gameState.turn === 1) || (mode === 'online' && gameState.turn !== onlineRole)}
+                disabled={((mode === 'ai' || mode === 'treasure-ai') && gameState.turn === 1) || (mode === 'online' && gameState.turn !== onlineRole)}
                 targetingSkill={targetingSkill}
                 onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })}
               />
@@ -893,7 +927,7 @@ export default function App() {
                           <button
                             key={idx}
                             onClick={() => {
-                              if (gameState.turn === 0 && ((mode === 'pvp' || mode === 'treasure-pvp') || (mode === 'ai' && gameState.turn === 0) || (mode === 'online' && gameState.turn === onlineRole))) {
+                              if (gameState.turn === 0 && ((mode === 'pvp' || mode === 'treasure-pvp') || ((mode === 'ai' || mode === 'treasure-ai') && gameState.turn === 0) || (mode === 'online' && gameState.turn === onlineRole))) {
                                 if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
                                   setTargetingSkill(targetingSkill === skill ? null : skill);
                                 } else {
@@ -901,11 +935,11 @@ export default function App() {
                                 }
                               }
                             }}
-                            disabled={gameState.turn !== 0 || (mode === 'ai' && gameState.turn !== 0) || (mode === 'online' && gameState.turn !== onlineRole)}
+                            disabled={gameState.turn !== 0 || ((mode === 'ai' || mode === 'treasure-ai') && gameState.turn !== 0) || (mode === 'online' && gameState.turn !== onlineRole)}
                             className={cn(
                               "text-xs px-2 py-1 rounded border",
                               targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
-                              (gameState.turn !== 0 || (mode === 'ai' && gameState.turn !== 0) || (mode === 'online' && gameState.turn !== onlineRole)) && "opacity-50 cursor-not-allowed"
+                              (gameState.turn !== 0 || ((mode === 'ai' || mode === 'treasure-ai') && gameState.turn !== 0) || (mode === 'online' && gameState.turn !== onlineRole)) && "opacity-50 cursor-not-allowed"
                             )}
                           >
                             {mode === 'online' && onlineRole !== 0 ? '???' : skill}
@@ -929,11 +963,11 @@ export default function App() {
                                 }
                               }
                             }}
-                            disabled={gameState.turn !== 1 || mode === 'ai' || (mode === 'online' && gameState.turn !== onlineRole)}
+                            disabled={gameState.turn !== 1 || mode === 'ai' || mode === 'treasure-ai' || (mode === 'online' && gameState.turn !== onlineRole)}
                             className={cn(
                               "text-xs px-2 py-1 rounded border",
                               targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
-                              (gameState.turn !== 1 || mode === 'ai' || (mode === 'online' && gameState.turn !== onlineRole)) && "opacity-50 cursor-not-allowed"
+                              (gameState.turn !== 1 || mode === 'ai' || mode === 'treasure-ai' || (mode === 'online' && gameState.turn !== onlineRole)) && "opacity-50 cursor-not-allowed"
                             )}
                           >
                             {mode === 'online' && onlineRole !== 1 ? '???' : skill}
