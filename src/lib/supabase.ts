@@ -97,22 +97,46 @@ export const getLeaderboard = async (limit: number = 10) => {
 
 // --- Multiplayer Functions ---
 
-export const createGame = async (userId: string, initialState: any) => {
+export const createGame = async (userId: string, initialState: any, maxPlayers = 2) => {
   if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };
   return supabase.from('games').insert({
     player1_id: userId,
     state: initialState,
-    status: 'waiting'
+    status: 'waiting',
+    max_players: maxPlayers,
   }).select().single();
 };
 
-export const joinGame = async (gameId: string, userId: string, state: any) => {
-  if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };
-  return supabase.from('games').update({
-    player2_id: userId,
-    status: 'playing',
-    state
-  }).eq('id', gameId).select().single();
+// slotIndex: 1=player2, 2=player3, 3=player4
+export const joinGame = async (gameId: string, userId: string, slotIndex: 1 | 2 | 3) => {
+  if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva'), playerIndex: -1 };
+  const field = slotIndex === 1 ? 'player2_id' : slotIndex === 2 ? 'player3_id' : 'player4_id';
+  const { data, error } = await supabase
+    .from('games').update({ [field]: userId }).eq('id', gameId).select().single();
+  return { data, error, playerIndex: slotIndex };
+};
+
+export const startOnlineGame = async (gameId: string) => {
+  if (!isSupabaseConfigured) return;
+  await supabase.from('games').update({ status: 'playing' }).eq('id', gameId);
+};
+
+export const cancelGame = async (gameId: string) => {
+  if (!isSupabaseConfigured) return;
+  await supabase.from('games').update({ status: 'cancelled' }).eq('id', gameId);
+};
+
+export const getActiveGame = async (userId: string) => {
+  if (!isSupabaseConfigured) return null;
+  const { data } = await supabase
+    .from('games')
+    .select('*')
+    .eq('status', 'playing')
+    .or(`player1_id.eq.${userId},player2_id.eq.${userId},player3_id.eq.${userId},player4_id.eq.${userId}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
 };
 
 export const updateGameState = async (gameId: string, state: any, status: string = 'playing', winnerId?: string) => {

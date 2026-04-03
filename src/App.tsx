@@ -5,7 +5,7 @@ import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySk
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile,
-  createGame, joinGame, startOnlineGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
+  createGame, joinGame, startOnlineGame, cancelGame, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -43,6 +43,7 @@ export default function App() {
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [hostedGameData, setHostedGameData] = useState<any | null>(null);
   const [botSlots, setBotSlots] = useState<number[]>([]);
+  const [rejoinCandidate, setRejoinCandidate] = useState<any | null>(null);
   const [waitingGames, setWaitingGames] = useState<any[]>([]);
   const [opponent, setOpponent] = useState<Profile | null>(null);
   const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
@@ -54,6 +55,7 @@ export default function App() {
   const viewRef = useRef(view);
   const showWinRef = useRef(showWin);
   const hostedGameDataRef = useRef(hostedGameData);
+  const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { showWinRef.current = showWin; }, [showWin]);
@@ -63,13 +65,13 @@ export default function App() {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) { loadProfile(session.user.id); setView('menu'); }
+      if (session) { loadProfile(session.user.id); checkActiveGame(session.user.id); setView('menu'); }
       else setView('auth');
       setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) { loadProfile(session.user.id); setView(prev => prev === 'auth' ? 'menu' : prev); }
+      if (session) { loadProfile(session.user.id); checkActiveGame(session.user.id); setView(prev => prev === 'auth' ? 'menu' : prev); }
       else setView('auth');
     });
     return () => subscription.unsubscribe();
@@ -92,6 +94,11 @@ export default function App() {
   const loadProfile = async (userId: string) => {
     const dbProfile = await getDbProfile(userId);
     if (dbProfile) setProfile(dbProfile);
+  };
+
+  const checkActiveGame = async (userId: string) => {
+    const game = await getActiveGame(userId);
+    if (game) setRejoinCandidate(game);
   };
 
   const handleGuestLogin = async () => {
@@ -160,14 +167,24 @@ export default function App() {
           handleWin(isWinner ? onlineRole : (onlineRole === 0 ? 1 : 0), true);
         }
       })
+      .on('presence', { event: 'join' }, ({ key }) => {
+        if (key !== session.user.id && disconnectTimerRef.current) {
+          clearTimeout(disconnectTimerRef.current);
+          disconnectTimerRef.current = null;
+          setStatusMsg('Ellenfél visszacsatlakozott!');
+          setTimeout(() => setStatusMsg(''), 2500);
+        }
+      })
       .on('presence', { event: 'leave' }, ({ key }) => {
-        if (key !== session.user.id) {
-          setTimeout(() => {
+        if (key !== session.user.id && viewRef.current === 'game') {
+          setStatusMsg('Ellenfél kapcsolata megszakadt — 2 perc várakozás...');
+          disconnectTimerRef.current = setTimeout(() => {
+            disconnectTimerRef.current = null;
             if (!channel.presenceState()[key] && viewRef.current === 'game' && !showWinRef.current && !gameStateRef.current.gameOver) {
               updateGameState(onlineGameId, { ...gameStateRef.current, gameOver: true }, 'finished', session.user.id);
               handleWin(onlineRole, false, 'Ellenfél kilépett!');
             }
-          }, 3000);
+          }, 2 * 60 * 1000);
         }
       })
       .subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ online_at: new Date().toISOString() }); });
@@ -248,6 +265,10 @@ export default function App() {
   }, [view, gameState, mode, onlineGameId, onlineRole, session, handleWin]);
 
   const startGame = useCallback((selectedMode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => {
+    if (isOnlineMode(selectedMode) && onlineGameId) {
+      alert('Már bent vagy egy online játékban! Előbb lépj ki belőle.');
+      return;
+    }
     setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null);
     if (difficulty) setAiDifficulty(difficulty);
     if (isOnlineMode(selectedMode)) {
@@ -376,10 +397,29 @@ export default function App() {
 
   const handleStartOnlineGame = async () => {
     if (!onlineGameId || onlineRole !== 0) return;
-    // Embed bot player indices into game state, then flip status to playing
     const stateWithBots = { ...gameState, botPlayers: botSlots.length > 0 ? botSlots : undefined };
     await updateGameState(onlineGameId, stateWithBots, 'playing');
   };
+
+  const handleLeaveOnlineGame = useCallback(async () => {
+    if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
+    if (onlineGameId && onlineRole === 0) await cancelGame(onlineGameId);
+    setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setView('menu');
+  }, [onlineGameId, onlineRole]);
+
+  const handleRejoinGame = useCallback((game: any) => {
+    if (!session) return;
+    const myRole = game.player1_id === session.user.id ? 0
+      : game.player2_id === session.user.id ? 1
+      : game.player3_id === session.user.id ? 2
+      : 3;
+    setMode(game.state?.treasureMode ? 'treasure-online' : 'online');
+    setOnlineGameId(game.id);
+    setOnlineRole(myRole);
+    setGameState(game.state);
+    setRejoinCandidate(null);
+    setView('game');
+  }, [session]);
 
   if (authLoading) {
     return (
@@ -417,6 +457,30 @@ export default function App() {
           </div>
         )}
 
+        {/* Rejoin banner — shown on menu when an active game is detected */}
+        {view === 'menu' && rejoinCandidate && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="w-full max-w-2xl px-4 pt-4"
+          >
+            <div className="bg-[#1a0f08] border border-[#f0c866]/50 rounded-xl p-4 flex items-center gap-4 shadow-[0_0_20px_rgba(240,200,102,0.1)]">
+              <div className="flex-1">
+                <div className="font-bold text-[#f0c866] text-sm">Aktív játék található!</div>
+                <div className="text-xs text-[#a89078] mt-0.5">2 percen belül visszaléphetsz a folyamatban lévő meccsre.</div>
+              </div>
+              <button
+                onClick={() => handleRejoinGame(rejoinCandidate)}
+                className="bg-[#f0c866] text-[#1a0f08] font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-wider hover:bg-[#f4d488] transition-colors shrink-0"
+              >
+                Visszalépés
+              </button>
+              <button onClick={() => setRejoinCandidate(null)} className="text-[#a89078] hover:text-white transition-colors text-xs uppercase tracking-wider shrink-0">
+                Elvet
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
           {view === 'auth' && (
             <AuthView key="auth" usernameInput={usernameInput} onUsernameChange={setUsernameInput} onGuestLogin={handleGuestLogin} isSupabaseConfigured={isSupabaseConfigured} onTos={() => setView('tos')} onPrivacy={() => setView('privacy')} />
@@ -440,10 +504,10 @@ export default function App() {
             <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} />
           )}
           {view === 'lobby' && (
-            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={() => { setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setView('menu'); }} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
+            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
-            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} opponent={opponent} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); setView('menu'); }} />
+            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} opponent={opponent} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} />
           )}
           {view === 'leaderboard' && (
             <LeaderboardView key="leaderboard" profile={profile} leaderboardData={leaderboardData} tab={leaderboardTab} onTabChange={setLeaderboardTab} onBack={() => setView('menu')} isSupabaseConfigured={isSupabaseConfigured} />
