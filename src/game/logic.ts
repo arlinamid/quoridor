@@ -50,7 +50,7 @@ export function initState(treasureMode = false, playerCount = 2): GameState {
     walls: [],
     turn: 0,
     gameOver: false,
-    lastMoveTime: Date.now(),
+    lastMoveTime: undefined,
     treasureMode,
     playerCount,
   };

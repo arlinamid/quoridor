@@ -302,7 +302,10 @@ export default function App() {
   }, [view, mode, onlineGameId, session, gameState.gameOver]);
 
   useEffect(() => {
-    if (view !== 'game' || gameState.gameOver || !gameState.lastMoveTime) return;
+    if (view !== 'game' || gameState.gameOver || !gameState.lastMoveTime) {
+      if (view === 'game' && !gameState.lastMoveTime) setTimeLeft(120);
+      return;
+    }
     const interval = setInterval(() => {
       const remaining = Math.max(0, 120 - Math.floor((Date.now() - gameState.lastMoveTime!) / 1000));
       setTimeLeft(remaining);
@@ -325,7 +328,7 @@ export default function App() {
     setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null);
     if (difficulty) setAiDifficulty(difficulty);
     if (isOnlineMode(selectedMode)) {
-      setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setOpponent(null); setBotSlots([]); setHostedGameData(null); return;
+      setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setPlayerProfiles({}); setBotSlots([]); setHostedGameData(null); return;
     }
     setMode(selectedMode);
     setGameState(initState(isTreasureMode(selectedMode)));
