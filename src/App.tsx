@@ -166,6 +166,11 @@ export default function App() {
           const isWinner = g.winner_id === session.user.id;
           handleWin(isWinner ? onlineRole : (onlineRole === 0 ? 1 : 0), true);
         }
+        if (g.status === 'abandoned' && !showWinRef.current) {
+          setGameState(prev => ({ ...prev, gameOver: true }));
+          setWinReason('Játék lezárva — inaktivitás miatt.');
+          setShowWin(true);
+        }
       })
       .on('presence', { event: 'join' }, ({ key }) => {
         if (key !== session.user.id && disconnectTimerRef.current) {
@@ -247,6 +252,19 @@ export default function App() {
     }, 500);
     return () => clearTimeout(timer);
   }, [view, mode, gameState, animating, aiDifficulty]);
+
+  // Heartbeat: keep the game alive in the DB every 30 s while in an active online game
+  useEffect(() => {
+    if (view !== 'game' || !isOnlineMode(mode) || !onlineGameId || !session || gameState.gameOver) return;
+    const send = () => fetch('/api/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId: onlineGameId, userId: session.user.id }),
+    }).catch(() => {});
+    send();
+    const id = setInterval(send, 30_000);
+    return () => clearInterval(id);
+  }, [view, mode, onlineGameId, session, gameState.gameOver]);
 
   useEffect(() => {
     if (view !== 'game' || gameState.gameOver || !gameState.lastMoveTime) return;
