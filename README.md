@@ -230,18 +230,20 @@ Az `award-xp` Edge Function server-side XP validációt végez — megakadályoz
 
 ### Skill lista
 
-| Skill | Leírás |
-|-------|--------|
-| TELEPORT | Ugrás legfeljebb 2 cellára |
-| HAMMER | Egy fal lerombolása |
-| SKIP | Ellenfél körének kihagyása |
-| MOLE | 1 körön át átsétálhat falakon |
-| DYNAMITE | Egy metszésponthoz csatlakozó összes fal elpusztítása |
-| SHIELD | 2 körre blokkolja a vízszintes falakat előtted |
-| WALLS | +2 fal az inventoryba |
-| MAGNET | Ellenfelet 2 cellával közelebb húzza |
-| TRAP | Csapda elhelyezése az aktuális pozícióban |
-| SWAP | Pozíciók felcserélése az ellenféllel |
+Minden skill egy 56×56 px-es ikon gombként jelenik meg, játékos-specifikus akcentszínnel. Hover-re animált tooltip mutatja a nevet és a leírást. Az ellenfél skilljei `???`-ként rejtve jelennek meg online módban.
+
+| Skill | Ikon | Szín | Leírás |
+|-------|------|------|--------|
+| TELEPORT | ⚡ Zap | lila | Ugrás legfeljebb 2 cellára (célpont kijelölése) |
+| HAMMER | 🔨 Hammer | narancs | Egy fal lerombolása (célpont kijelölése) |
+| SKIP | ⏭ SkipForward | kék | Ellenfél következő körét kihagyja |
+| MOLE | ⛏ Pickaxe | lime | Következő körben átsétálhatsz falakon |
+| DYNAMITE | 🔥 Flame | piros | Egy metszésponthoz csatlakozó összes fal robbantása (célpont) |
+| SHIELD | 🛡 Shield | cián | 2 körre blokkolja a vízszintes falakat előtted |
+| WALLS | ➕ Plus | arany | Azonnal kapsz 2 extra falat |
+| MAGNET | 🧲 Magnet | rózsaszín | Ellenfelet 2 cellával közelebb húzza |
+| TRAP | 🎯 Crosshair | narancs | Csapda az aktuális cellán — ellenfelet visszadobja starthoz |
+| SWAP | ↔ ArrowLeftRight | zöld | Pozíció csere az ellenféllel |
 
 ---
 

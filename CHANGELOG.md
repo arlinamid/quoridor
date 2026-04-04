@@ -23,6 +23,8 @@ All notable changes to Quoridor Falsakk are documented here.
 - **`'abandoned'` game status** — realtime subscription detects abandoned games and shows "Játék lezárva — inaktivitás miatt."
 - **Presence-aware bot failover** — `connectedUserIds` tracked via Supabase Presence; bot controller computed as the lowest-indexed *connected* human; if host disconnects, the next connected player automatically drives the bots
 - **Per-player profiles in game** — `playerProfiles: Record<number, Profile>` replaces single `opponent`; all player slots (2–4) resolved correctly by role index; bot slots show "Bot", AI shows "Gép (AI)"
+- **Skill icon buttons with tooltips** — each skill rendered as a 56×56 icon button with unique Lucide icon, per-skill accent colour, active glow when in targeting mode, and animated hover tooltip (skill name + Hungarian description); opponent skills shown as lock icon + `???`
+- **Lobby player names** — slot rows now show the joining player's actual username in their player colour; `lobbySlotNames` fetched on every `hostedGameData` change; own slot resolved from local profile without extra DB call
 
 ### Fixed
 - `cloneS` now preserves `botPlayers` field (was silently dropped, causing bots to stop after first move)
