@@ -99,6 +99,17 @@ VITE_SUPABASE_ANON_KEY=<anon-key>
 
 Ha a Supabase nincs konfigurálva, az app lokális módban indul (localStorage profil, nincs online funkció).
 
+### Vercel környezeti változók (dashboard → Settings → Environment Variables)
+
+A Vercel serverless API route-okhoz (`/api/*`) a service role key szükséges az RLS megkerüléséhez:
+
+```
+SUPABASE_URL              = https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY = <service-role-key>
+```
+
+> ⚠️ A service role key csak a Vercel szerver oldalon használható — soha ne kerüljön a frontend kódba vagy `.env.local`-ba.
+
 ### Fejlesztési szerver
 
 ```bash
@@ -161,6 +172,18 @@ alter table games add column if not exists player4_id uuid references auth.users
 alter table games add column if not exists last_heartbeat timestamptz default now();
 ```
 
+### Status constraint (kötelező migráció)
+
+A `games` táblának mind az 5 státuszt engedélyezni kell:
+
+```sql
+alter table games drop constraint if exists games_status_check;
+alter table games add constraint games_status_check
+  check (status = any (array['waiting','playing','finished','abandoned','cancelled']));
+```
+
+> Ha ez hiányzik, a pg_cron és a `cancelGame()` hívások csendesen hibáznak.
+
 ### pg_cron — automatikus játék lezárás
 
 ```sql
@@ -176,6 +199,13 @@ select cron.schedule(
       and last_heartbeat < now() - interval '2 minutes'
   $$
 );
+```
+
+A cron futásainak ellenőrzése:
+
+```bash
+npx supabase db query --linked \
+  "SELECT jobid, status, return_message, start_time FROM cron.job_run_details ORDER BY start_time DESC LIMIT 5;"
 ```
 
 ### Edge Function deploy
@@ -230,9 +260,14 @@ Az `award-xp` Edge Function server-side XP validációt végez — megakadályoz
 ```
 Játék állapotok:
   waiting → playing → finished   (normál befejezés)
+          → cancelled             (host kilép lobby-ból)
                     → abandoned  (heartbeat timeout)
 
 Heartbeat folyamat:
   Kliens  ──POST /api/heartbeat every 30s──▶  Supabase DB (last_heartbeat)
   pg_cron ──every 2 min────────────────────▶  abandoned if last_heartbeat > 2 min
+
+Időtúllépés (per-move, 2 perc):
+  2 játékos:   időtúllépő játékos veszít
+  3–4 játékos: időtúllépő játékos köre kihagyódik, a következő játékos lép
 ```

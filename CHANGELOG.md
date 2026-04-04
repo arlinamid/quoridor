@@ -21,6 +21,8 @@ All notable changes to Quoridor Falsakk are documented here.
 - **4-color pawns** — `PLAYER_COLORS` used for pawns and goal-line edge indicators on all 4 sides
 - **Disconnect tolerance** — presence leave timeout extended from 3 s to 2 minutes; presence join clears the timer and shows "Ellenfél visszacsatlakozott!"
 - **`'abandoned'` game status** — realtime subscription detects abandoned games and shows "Játék lezárva — inaktivitás miatt."
+- **Presence-aware bot failover** — `connectedUserIds` tracked via Supabase Presence; bot controller computed as the lowest-indexed *connected* human; if host disconnects, the next connected player automatically drives the bots
+- **Per-player profiles in game** — `playerProfiles: Record<number, Profile>` replaces single `opponent`; all player slots (2–4) resolved correctly by role index; bot slots show "Bot", AI shows "Gép (AI)"
 
 ### Fixed
 - `cloneS` now preserves `botPlayers` field (was silently dropped, causing bots to stop after first move)
@@ -28,10 +30,18 @@ All notable changes to Quoridor Falsakk are documented here.
 - `executeMove` and `executeSkill` win checks now use `hasWon(p)` to support `goalCol` players (P3/P4)
 - Board min cell size kept at 28px on mobile (was 36px, caused overflow on narrow screens)
 - `award-xp` Edge Function CORS: added `Access-Control-Allow-Methods: POST, OPTIONS` header
+- **Stale lobby games** — `handleCreateOnlineGame` calls `cancelMyWaitingGames()` before inserting; old abandoned waiting games no longer accumulate in the lobby list
+- **Duplicate player names** — in 3–4 player online games all non-self slots now resolve to the correct username via `playerProfiles[pi]`; previously all showed the same single `opponent` profile
+- **Timer fires from game start** — `initState` was setting `lastMoveTime: Date.now()`, so the 2-minute clock started at game creation; changed to `undefined` so timer only starts after the first actual move
+- **Timer stale closure / freeze** — timer effect depended on `[gameState, handleWin, ...]`; recreated on every move; stale `gameOver` in closure caused repeated `handleWin` calls; full rewrite using refs (`gameStateRef`, `modeRef`, `onlineRoleRef`, `handleWinRef`) with `[view]` only as dependency
+- **Timer wrong winner for 3–4 players** — `1 - gameState.turn` gives `-1` for player index 2; 3–4 player timeout now skips the timed-out player's turn instead of declaring an invalid winner
+- **API heartbeat/cleanup silently failing** — all three Vercel API files used `VITE_SUPABASE_ANON_KEY` which cannot bypass RLS; switched to `SUPABASE_SERVICE_ROLE_KEY` (with `VITE_` prefix fallback)
+- **pg_cron failing since setup** — `games_status_check` constraint only allowed `waiting | playing | finished`; `abandoned` and `cancelled` were missing; every cron run errored; fixed by dropping and recreating the constraint with all 5 valid statuses
 
 ### Changed
 - Vercel cron removed (Hobby plan limit); cleanup handled by heartbeat piggyback + Supabase pg_cron instead
 - `initState(treasureMode, playerCount)` — player starting positions and wall counts scale with player count
+- API files use `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_URL` env var names (with `VITE_` fallback) — add both to Vercel dashboard
 
 ### DB migrations required
 ```sql
@@ -39,6 +49,11 @@ alter table games add column if not exists max_players integer default 2;
 alter table games add column if not exists player3_id uuid references auth.users(id);
 alter table games add column if not exists player4_id uuid references auth.users(id);
 alter table games add column if not exists last_heartbeat timestamptz default now();
+
+-- Fix status constraint (add abandoned + cancelled)
+alter table games drop constraint if exists games_status_check;
+alter table games add constraint games_status_check
+  check (status = any (array['waiting','playing','finished','abandoned','cancelled']));
 
 -- pg_cron cleanup (run once)
 create extension if not exists pg_cron;
