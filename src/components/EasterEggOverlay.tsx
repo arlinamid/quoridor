@@ -1,24 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CollectibleType, COLLECTIBLE_META } from '../lib/types';
-
-function rollEgg(): CollectibleType | null {
-  const now = new Date();
-  const isEvent = now >= new Date('2026-04-04') && now < new Date('2026-04-09');
-  const roll = Math.random();
-  if (isEvent) {
-    // Easter event: boosted but throttled by useEasterEggSpawner (min gap between rolls)
-    if (roll < 0.003) return 'EGG_RAINBOW'; // 0.3%
-    if (roll < 0.012) return 'EGG_GOLD';    // 0.9%
-    if (roll < 0.045) return 'EGG_BASIC';   // 3.3%
-  } else {
-    // Normal: very rare
-    if (roll < 0.0005) return 'EGG_RAINBOW'; // 0.05%
-    if (roll < 0.002)  return 'EGG_GOLD';    // 0.15%
-    if (roll < 0.005)  return 'EGG_BASIC';   // 0.3%
-  }
-  return null;
-}
+import { rollEggAt } from '../lib/easterEggRoll';
 
 /** Min real time between spawn *attempts* while in-game (turn changes can be very frequent). */
 const MIN_MS_BETWEEN_SPAWN_ATTEMPTS = 28_000;
@@ -39,7 +22,7 @@ export function useEasterEggSpawner(
     const now = Date.now();
     if (now - lastSpawnAttemptRef.current < MIN_MS_BETWEEN_SPAWN_ATTEMPTS) return;
     lastSpawnAttemptRef.current = now;
-    const type = rollEgg();
+    const type = rollEggAt(new Date());
     if (!type) return;
     const x = 15 + Math.random() * 70;
     const y = 20 + Math.random() * 55;

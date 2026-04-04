@@ -4,6 +4,22 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ---
 
+## [Unreleased] — 2026-04-04 (patch 4)
+
+### Security (Supabase)
+- **`profiles_peer` nézet** — publikus oszlopok (id, username, xp, wins, losses, level, created_at); **fingerprint / egg_wallet / owned_skills / skill_loadout / collected_items** nem látszanak listázásnál vagy más játékos lekérésénél.
+- **RLS** — eltávolítva a „mindenki olvassa a teljes `profiles` sort” policy; **csak saját sor** (`auth.uid() = id`) a teljes táblára.
+- **`get_username_for_fingerprint` RPC** — `SECURITY DEFINER`; vendég név előtöltés anon nélkül közvetlen `profiles` scan nélkül.
+- **`protect_profile_progression` trigger** — kliens nem módosíthat **xp / wins / losses / level**; **service_role** (pl. `award-xp`) igen.
+- **Kliens** — `getDbProfile(userId, viewerUserId)`; ranglista `profiles_peer`; győzelem után **nincs** `updateDbProfile` XP fallback (szerver `getDbProfile` frissítés).
+
+### Added — Tests
+- **Vitest** (`npm test`, `npm run test:watch`) + **happy-dom**.
+- Tesztek: `profileAccess`, `formatGuestAuthError`, `calculateLevel`, `easterEggRoll` (határértékek + eloszlás), `joinGame` RPC szerződés (`vi.spyOn`), játék `logic` (hasWon, initState, v2w, isBlocked), dokumentációs security invariant lista.
+- **`rollEggAt`** kivonva `easterEggRoll.ts`-be a determinisztikus tesztekhez.
+
+---
+
 ## [Unreleased] — 2026-04-04 (patch 3)
 
 ### Changed

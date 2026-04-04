@@ -21,10 +21,10 @@ create table public.profiles (
 alter table public.profiles enable row level security;
 
 -- 3. Create RLS Policies
--- Allow anyone to read profiles (useful for leaderboards)
-create policy "Public profiles are viewable by everyone."
-  on public.profiles for select
-  using ( true );
+-- Full row: own profile only. Leaderboard / other players: use profiles_peer view (see migrations).
+drop policy if exists "Public profiles are viewable by everyone." on public.profiles;
+create policy profiles_select_own_full on public.profiles for select to authenticated
+  using ( auth.uid() = id );
 
 -- Allow users to insert their own profile
 create policy "Users can insert their own profile."
@@ -105,8 +105,13 @@ create policy "Users can create games"
   on public.games for insert
   with check (auth.uid() = player1_id);
 
+-- Only participants may update; waiting-lobby joins use join_online_game() SECURITY DEFINER RPC
+-- (never use OR player2_id IS NULL — any user could grief every open lobby.)
 create policy "Players can update games"
   on public.games for update
-  using (auth.uid() = player1_id or auth.uid() = player2_id or player2_id is null);
+  using (
+    auth.uid() = player1_id or auth.uid() = player2_id
+    or auth.uid() = player3_id or auth.uid() = player4_id
+  );
 
 alter publication supabase_realtime add table games;

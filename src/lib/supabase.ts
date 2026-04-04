@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
+import { profileSelectTable } from './profileAccess';
 
 // We use environment variables for Supabase connection.
 // If they are not set, we use a placeholder to prevent crashing,
@@ -55,6 +56,9 @@ export const signInAnonymously = async (username?: string, fingerprint?: string)
 
 /** User-facing Hungarian message for vendég / anon auth failures (network throws, AuthApiError, trigger 500, etc.). */
 export function formatGuestAuthError(err: unknown): string {
+  if (err == null) {
+    return 'Ismeretlen hiba a bejelentkezés során.';
+  }
   const msg =
     err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
       ? (err as { message: string }).message
@@ -93,24 +97,19 @@ export const upgradeAnonymousAccount = async (email: string) => {
 
 export const getUsernameByFingerprint = async (fingerprint: string) => {
   if (!isSupabaseConfigured) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('username')
-    .eq('fingerprint', fingerprint)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-    
+  const { data, error } = await supabase.rpc('get_username_for_fingerprint', { fp: fingerprint });
   if (error) {
     console.error('Hiba a fingerprint lekérésekor:', error);
     return null;
   }
-  return data?.username;
+  return typeof data === 'string' ? data : null;
 };
 
-export const getDbProfile = async (userId: string) => {
+/** @param viewerUserId — session user id; must equal userId to load full profile (else peers use profiles_peer). */
+export const getDbProfile = async (userId: string, viewerUserId: string | null) => {
   if (!isSupabaseConfigured) return null;
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+  const table = profileSelectTable(userId, viewerUserId);
+  const { data, error } = await supabase.from(table).select('*').eq('id', userId).single();
   if (error) {
     console.error('Hiba a profil lekérésekor:', error);
     return null;
@@ -127,7 +126,7 @@ export const updateDbProfile = async (userId: string, updates: Partial<Profile>)
 export const getLeaderboard = async (limit: number = 10) => {
   if (!isSupabaseConfigured) return [];
   const { data, error } = await supabase
-    .from('profiles')
+    .from('profiles_peer')
     .select('*')
     .order('xp', { ascending: false })
     .limit(limit);
@@ -156,13 +155,15 @@ export const createGame = async (userId: string, initialState: any, maxPlayers =
   }).select().single();
 };
 
-// slotIndex: 1=player2, 2=player3, 3=player4
-export const joinGame = async (gameId: string, userId: string, slotIndex: 1 | 2 | 3) => {
+// slotIndex: 1=player2, 2=player3, 3=player4 — server uses auth.uid() only (see join_online_game RPC)
+export const joinGame = async (gameId: string, _userId: string, slotIndex: 1 | 2 | 3) => {
   if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva'), playerIndex: -1 };
-  const field = slotIndex === 1 ? 'player2_id' : slotIndex === 2 ? 'player3_id' : 'player4_id';
-  const { data, error } = await supabase
-    .from('games').update({ [field]: userId }).eq('id', gameId).select().single();
-  return { data, error, playerIndex: slotIndex };
+  const { data, error } = await supabase.rpc('join_online_game', {
+    p_game_id: gameId,
+    p_slot: slotIndex,
+  });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: row ?? null, error, playerIndex: slotIndex };
 };
 
 export const startOnlineGame = async (gameId: string) => {

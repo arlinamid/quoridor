@@ -133,7 +133,7 @@ export default function App() {
   useEffect(() => { saveLocalProfile(profile); }, [profile]);
 
   const loadProfile = async (userId: string) => {
-    const dbProfile = await getDbProfile(userId);
+    const dbProfile = await getDbProfile(userId, userId);
     if (dbProfile) {
       setProfile(dbProfile);
       if (dbProfile.skill_loadout) setSkillLoadout(dbProfile.skill_loadout);
@@ -145,7 +145,7 @@ export default function App() {
     const map: Record<number, Profile> = {};
     await Promise.all(ids.map(async (uid, idx) => {
       if (!uid || uid === myUserId) return;
-      const p = await getDbProfile(uid);
+      const p = await getDbProfile(uid, myUserId);
       if (p) map[idx] = p;
     }));
     setPlayerProfiles(map);
@@ -165,7 +165,7 @@ export default function App() {
         map[idx] = profile.username;
         return;
       }
-      const p = await getDbProfile(uid);
+      const p = await getDbProfile(uid, session.user.id);
       if (p) map[idx] = p.username;
     })).then(() => setLobbySlotNames(map));
   }, [hostedGameData, session, profile.username]);
@@ -214,8 +214,9 @@ export default function App() {
       if (isSupabaseConfigured && session?.user?.id) {
         awardXp(session, mode, isOnlineMode(mode) ? won : winnerIndex === 0).then(result => {
           if (result) setProfile(prev => ({ ...prev, ...result }));
-        }).catch(() => {
-          updateDbProfile(session!.user.id, { wins: newP.wins, losses: newP.losses, xp: newP.xp, level: newP.level });
+        }).catch(async () => {
+          const refreshed = await getDbProfile(session!.user.id, session!.user.id);
+          if (refreshed) setProfile(prev => ({ ...prev, ...refreshed }));
         });
       }
       return newP;
