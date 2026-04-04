@@ -6,7 +6,7 @@ import {
   Bot, Zap, Hammer, SkipForward, Pickaxe, Flame,
   Shield, Plus, Magnet, Crosshair, ArrowLeftRight, Lock,
 } from 'lucide-react';
-import { GameState, SkillType } from '../../game/logic';
+import { GameState, SkillType, isTeamGameState } from '../../game/logic';
 import { Profile } from '../../lib/supabase';
 import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/types';
 import { QuoridorBoard } from '../QuoridorBoard';
@@ -146,6 +146,12 @@ export function GameView({
 }: GameViewProps) {
   const playerCount = gameState.players.length;
   const botPlayers = gameState.botPlayers ?? [];
+  const teamPlay = isTeamGameState(gameState);
+  const teamLetter = (pi: number) => {
+    if (!teamPlay || !gameState.teams) return null;
+    const t = gameState.teams[pi];
+    return t === 0 ? 'A' : t === 1 ? 'B' : null;
+  };
 
   const getPlayerName = (pi: number) => {
     if (botPlayers.includes(pi)) return 'Bot';
@@ -195,7 +201,20 @@ export function GameView({
                   {isBot && <Bot size={10} className="text-[#8e44ad] shrink-0" />}
                   {getPlayerName(pi)}
                 </div>
-                <div className="text-[10px] text-[#a89078]">{PLAYER_LABELS[pi]} · {p.walls} fal</div>
+                <div className="text-[10px] text-[#a89078]">
+                  {PLAYER_LABELS[pi]}
+                  {teamLetter(pi) && (
+                    <span
+                      className={cn(
+                        ' font-bold',
+                        teamLetter(pi) === 'A' ? 'text-cyan-400/95' : 'text-rose-400/95',
+                      )}
+                    >
+                      {' '}· csapat {teamLetter(pi)}
+                    </span>
+                  )}
+                  {' · '}{p.walls} fal
+                </div>
               </div>
             </div>
           );

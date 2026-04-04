@@ -4,6 +4,7 @@ import { ArrowLeft, User, Map, Play, Users, Bot, X } from 'lucide-react';
 import { GameMode } from '../../lib/types';
 import { Profile } from '../../lib/supabase';
 import { countFilledOnlineSlots } from '../../lib/onlineLobby';
+import { teamsForOnlineLayout, type OnlineTeamLayoutId } from '../../game/logic';
 import { cn } from '../../lib/utils';
 
 export const PLAYER_COLORS = ['#e74c3c', '#2c3e50', '#27ae60', '#8e44ad'] as const;
@@ -26,6 +27,8 @@ interface LobbyViewProps {
   onCreateGame: () => void;
   onStartGame: () => void;
   onJoinGame: (id: string, state: any, p1Id: string, slotIndex: 1 | 2 | 3) => void;
+  teamLayout: OnlineTeamLayoutId;
+  onTeamLayoutChange: (l: OnlineTeamLayoutId) => void;
 }
 
 function useCountdown(fromMs: number, active: boolean) {
@@ -48,11 +51,22 @@ function fmt(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+function teamLayoutLabel(layout: OnlineTeamLayoutId, cap: number): string {
+  if (layout === 'ffa' || cap < 3) return 'Mindenki maga (FFA)';
+  if (cap === 3) {
+    if (layout === '3_1v2') return 'P1 egyedül vs P2+P3';
+    if (layout === '3_2v1') return 'P1+P2 vs P3 egyedül';
+  }
+  if (cap === 4 && layout === '4_2v2') return 'P1+P2 vs P3+P4 (2–2)';
+  return 'Mindenki maga (FFA)';
+}
+
 export function LobbyView({
   mode, onlineGameId, onlineRole, maxPlayers, onMaxPlayersChange,
   waitingGames, lobbyUsers, sessionUserId,
   hostedGameData, botSlots, slotNames, onToggleBot,
   onBack, onCreateGame, onStartGame, onJoinGame,
+  teamLayout, onTeamLayoutChange,
 }: LobbyViewProps) {
   const AUTO_START_MS = 2 * 60 * 1000;
   const isHost = onlineRole === 0 && !!onlineGameId;
@@ -62,19 +76,37 @@ export function LobbyView({
   const filledSlots = hostedGameData ? countFilledOnlineSlots(hostedGameData, lobbyCap, botSlots) : 1;
   const canStart = filledSlots >= 2;
 
+  const effectiveTeamLayout: OnlineTeamLayoutId = isHost
+    ? teamLayout
+    : ((hostedGameData?.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? 'ffa');
+
   // Filter lobby to same mode
   const activeGames = waitingGames.filter(g => {
     const sameTreasure = Boolean(g.state?.treasureMode) === (mode === 'treasure-online');
     return lobbyUsers.has(g.player1_id) && sameTreasure;
   });
 
-  const SlotRow = ({ slotIdx, playerId, label }: { slotIdx: number; playerId?: string; label: string }) => {
+  const previewTeams = lobbyCap >= 3 ? teamsForOnlineLayout(effectiveTeamLayout, lobbyCap) : undefined;
+
+  const SlotRow = ({
+    slotIdx, playerId, label, teamLetter,
+  }: { slotIdx: number; playerId?: string; label: string; teamLetter?: 'A' | 'B' }) => {
     const isBot = botSlots.includes(slotIdx);
     const isEmpty = !playerId && !isBot;
     const displayName = slotNames[slotIdx];
     return (
       <div className="flex items-center gap-3 bg-[#241810] p-3 rounded-lg border border-white/5">
-        <div className="w-3 h-3 rounded-full" style={{ background: PLAYER_COLORS[slotIdx] }} />
+        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: PLAYER_COLORS[slotIdx] }} />
+        {teamLetter && (
+          <span
+            className={cn(
+              'text-[10px] font-bold uppercase w-5 h-5 rounded flex items-center justify-center shrink-0 border',
+              teamLetter === 'A' ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10' : 'border-rose-500/50 text-rose-400 bg-rose-500/10',
+            )}
+          >
+            {teamLetter}
+          </span>
+        )}
         <span className="text-xs text-[#a89078] uppercase tracking-wider w-8">{label}</span>
         {playerId ? (
           <span className="text-sm font-bold flex-1 flex items-center gap-1.5" style={{ color: PLAYER_COLORS[slotIdx] }}>
@@ -148,18 +180,81 @@ export function LobbyView({
 
             {/* Player slots */}
             <div className="flex flex-col gap-2">
-              {Array.from({ length: maxPlayers }).map((_, i) => {
+              {Array.from({ length: lobbyCap }).map((_, i) => {
                 const idField = ['player1_id', 'player2_id', 'player3_id', 'player4_id'][i];
+                const tid = previewTeams?.[i];
+                const teamLetter = tid === 0 ? 'A' : tid === 1 ? 'B' : undefined;
                 return (
                   <SlotRow
                     key={i}
                     slotIdx={i}
                     playerId={hostedGameData?.[idField]}
                     label={PLAYER_LABELS[i]}
+                    teamLetter={teamLetter}
                   />
                 );
               })}
             </div>
+
+            {lobbyCap >= 3 && (
+              <div className="rounded-lg border border-white/10 bg-[#241810]/80 p-3 space-y-2">
+                <div className="text-[10px] text-[#a89078] uppercase tracking-wider">Csapat mód (online)</div>
+                {isHost ? (
+                  <div className="flex flex-col gap-2">
+                    {lobbyCap === 3 && (
+                      <div className="flex flex-wrap gap-2">
+                        {([
+                          { id: 'ffa' as const, label: 'FFA' },
+                          { id: '3_1v2' as const, label: '1+2 (P1 vs P2+P3)' },
+                          { id: '3_2v1' as const, label: '2+1 (P1+P2 vs P3)' },
+                        ]).map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => onTeamLayoutChange(opt.id)}
+                            className={cn(
+                              'px-2 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition-colors',
+                              teamLayout === opt.id
+                                ? 'bg-[#f0c866] text-[#1a0f08] border-[#f0c866]'
+                                : 'bg-[#1a0f08] text-[#a89078] border-white/10 hover:border-[#f0c866]/50',
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {lobbyCap === 4 && (
+                      <div className="flex flex-wrap gap-2">
+                        {([
+                          { id: 'ffa' as const, label: 'FFA' },
+                          { id: '4_2v2' as const, label: '2–2 (P1+P2 vs P3+P4)' },
+                        ]).map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => onTeamLayoutChange(opt.id)}
+                            className={cn(
+                              'px-2 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition-colors',
+                              teamLayout === opt.id
+                                ? 'bg-[#f0c866] text-[#1a0f08] border-[#f0c866]'
+                                : 'bg-[#1a0f08] text-[#a89078] border-white/10 hover:border-[#f0c866]/50',
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#c8b090]">{teamLayoutLabel(effectiveTeamLayout, lobbyCap)}</p>
+                )}
+                <p className="text-[10px] text-[#a89078]/80 leading-relaxed">
+                  Győzelem: ha a csapatod bármelyik tagja eléri a saját célját, mindannyian nyertesként számítotok (XP).
+                </p>
+              </div>
+            )}
 
             {isHost && (
               <button

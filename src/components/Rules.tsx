@@ -44,7 +44,7 @@ export function Rules({ onBack }: RulesProps) {
           <ul className="list-disc list-inside space-y-2 ml-2 leading-relaxed">
             <li><strong>Helyi 2 fős</strong> — klasszikus vagy <strong>Kincskereső</strong> (lásd lent).</li>
             <li><strong>Gép ellen</strong> — nehézség: könnyű / közepes / nehéz; a gép mozgást és falat is választ.</li>
-            <li><strong>Online</strong> — lobby, 2–4 játékos, opcionális bot slotok; ugyanaz a szabályrendszer, állapot szinkron.</li>
+            <li><strong>Online</strong> — lobby, 2–4 játékos, opcionális bot slotok; ugyanaz a szabályrendszer, állapot szinkron. <strong>Csapat mód</strong> (3–4 fő): 3 játékosnál <strong>1+2</strong> (P1 vs P2+P3) vagy <strong>2+1</strong> (P1+P2 vs P3); 4 játékosnál <strong>2–2</strong> (P1+P2 vs P3+P4). Győzelem: ha a csapatod bármelyik bábuja eléri a saját céloldalát, mindannyian nyertesként számítotok.</li>
           </ul>
         </section>
 

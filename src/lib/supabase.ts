@@ -20,6 +20,8 @@ export type Profile = {
   wins: number;
   losses: number;
   level: number;
+  /** Ha true: nem kér opcionális marketing / promóciós megkeresést (profilban állítható). */
+  marketing_opt_out?: boolean;
   collected_items?: import('./types').CollectedItem[];
   skill_loadout?: import('../game/logic').SkillType[] | null;
   owned_skills?: import('../game/logic').SkillType[];

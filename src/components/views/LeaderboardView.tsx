@@ -16,12 +16,16 @@ interface LeaderboardViewProps {
   isSupabaseConfigured: boolean;
   onUsernameUpdate: (username: string) => Promise<void>;
   onUpgradeAccount: (email: string) => Promise<{ error: any }>;
+  onMarketingOptOutChange: (optOut: boolean) => void;
+  onOpenTos: () => void;
+  onOpenPrivacy: () => void;
 }
 
 export function LeaderboardView({
   profile, leaderboardData, tab, isAnonymous, userEmail,
   onTabChange, onBack, isSupabaseConfigured,
   onUsernameUpdate, onUpgradeAccount,
+  onMarketingOptOutChange, onOpenTos, onOpenPrivacy,
 }: LeaderboardViewProps) {
   const xpForNextLevel    = (profile.level) * (profile.level) * 100;
   const xpForCurrentLevel = (profile.level - 1) * (profile.level - 1) * 100;
@@ -200,6 +204,30 @@ export function LeaderboardView({
               <div className="bg-[#241810] p-4 rounded-xl border border-white/5 text-center">
                 <div className="text-3xl font-light text-[#a78bfa] mb-1">{winRate}%</div>
                 <div className="text-xs text-[#a89078] uppercase tracking-wider">Win rate</div>
+              </div>
+            </div>
+
+            {/* Privacy & marketing opt-out */}
+            <div className="rounded-xl border border-white/10 bg-[#1a0f08]/40 p-4 space-y-3">
+              <div className="text-xs font-bold text-[#f0c866] uppercase tracking-wider">Adatvédelem és értesítések</div>
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={!!profile.marketing_opt_out}
+                  onChange={(e) => onMarketingOptOutChange(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-white/20 bg-[#241810] text-[#f0c866] focus:ring-[#f0c866]/50"
+                />
+                <span className="text-[11px] text-[#a89078] leading-relaxed group-hover:text-[#c8b090] transition-colors">
+                  <strong className="text-[#f5e6d3]">Marketing opt-out:</strong> nem kérek opcionális marketing- vagy promóciós megkereséseket (pl. email). Jelenleg ilyen küldeményt nem használunk; a beállítás a jövőbeli tájékoztatáshoz szolgál, és a profilodban tároljuk.
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                <button type="button" onClick={onOpenTos} className="text-[#f0c866] hover:underline underline-offset-2">
+                  ÁSZF
+                </button>
+                <button type="button" onClick={onOpenPrivacy} className="text-[#f0c866] hover:underline underline-offset-2">
+                  Adatvédelmi tájékoztató
+                </button>
               </div>
             </div>
 

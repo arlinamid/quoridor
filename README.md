@@ -28,6 +28,21 @@ Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI b
 - **Visszacsatlakozás** — kiesés után 2 percen belül újra be lehet lépni a meccsbe
 - **Heartbeat rendszer** — 30 másodpercenként életjelet küld; inaktív játékok 2 perc után automatikusan lezáródnak
 - **Játékon belüli maradás** — új online meccs nem indítható, amíg egy másikban benne vagy
+- **Online csapatbeosztás (3–4 játékos)** — a host a lobbyban választhat szabad játékot (FFA) vagy fix csapatelrendezést (pl. három játékosnál 1v2 / 2v1, négy játékosnál 2v2); a győzelem képernyő csapat szerint értelmezi a nyerést
+
+---
+
+## Jogi dokumentumok és adatvédelem
+
+- **ÁSZF** és **adatvédelmi tájékoztató** elérhető a bejelentkezési képernyőn, valamint a **Profil / ranglista** nézetben (`LegalDocs.tsx`). A jogi képernyő „Vissza” gombja oda visz vissza, ahonnan megnyitották (auth vagy profil).
+- **Marketing opt-out** — opcionális promóciós megkeresések kikapcsolása a profilban (jelölőnégyzet). A beállítás a `profiles.marketing_opt_out` oszlopban tárolódik; **nem** szerepel a nyilvános `profiles_peer` nézetben.
+- **Adatbázis**: új vagy meglévő projekten futtasd a migrációt `supabase/migrations/20260404120090_profile_marketing_opt_out.sql`, vagy manuálisan:
+
+```sql
+alter table profiles add column if not exists marketing_opt_out boolean not null default false;
+```
+
+Részletes séma és megjegyzések: `supabase-schema.sql`.
 
 ---
 
@@ -66,7 +81,7 @@ src/
       MenuView.tsx           # Lépcsőzetes főmenü (+ Áruház gomb)
       LobbyView.tsx          # Online lobby (2–4 játékos, bot slot-ok)
       GameView.tsx           # Játékfelület (dinamikus 2–4 játékos panel, Easter egg overlay)
-      LeaderboardView.tsx    # Statisztikák, ranglista, profil szerkesztés, fiók upgrade
+      LeaderboardView.tsx    # Statisztikák, ranglista, profil, fiók upgrade, marketing opt-out, ÁSZF/adatvédelem linkek
       StoreView.tsx          # Gamepass áruház (Bolt / Loadout / Gyűjtemény tab)
   lib/
     supabase.ts              # Supabase kliens, auth, DB, RPC hívások, egg wallet
@@ -152,7 +167,8 @@ create table profiles (
   collected_items jsonb default '[]',
   skill_loadout   text[],
   egg_wallet      jsonb default '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}',
-  owned_skills    text[] default '{}'
+  owned_skills    text[] default '{}',
+  marketing_opt_out boolean not null default false
 );
 
 -- games
@@ -185,6 +201,7 @@ alter table profiles add column if not exists collected_items jsonb default '[]'
 alter table profiles add column if not exists skill_loadout text[] default null;
 alter table profiles add column if not exists egg_wallet jsonb default '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb;
 alter table profiles add column if not exists owned_skills text[] default '{}'::text[];
+alter table profiles add column if not exists marketing_opt_out boolean not null default false;
 ```
 
 ### Store RPC függvények

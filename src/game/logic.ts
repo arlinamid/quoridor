@@ -17,6 +17,9 @@ export type Player = {
 
 export type Wall = { r: number; c: number; orient: 'h' | 'v' };
 
+/** Lobby / waiting row: FFA vagy fix csapatbeosztás 3–4 játékosnál. */
+export type OnlineTeamLayoutId = 'ffa' | '3_1v2' | '3_2v1' | '4_2v2';
+
 export type GameState = {
   players: Player[];
   walls: Wall[];
@@ -26,16 +29,42 @@ export type GameState = {
   treasureMode?: boolean;
   playerCount?: number;
   botPlayers?: number[];   // indices of bot-controlled players
+  /** Online team mode: same length as players, 0 = team A, 1 = team B. Omitted = free-for-all. */
+  teams?: number[];
+  /** Waiting lobby only (DB): host team preset for joiners; not used on the board during play. */
+  pendingTeamLayout?: OnlineTeamLayoutId;
   treasures?: { r: number; c: number }[];
   traps?: { r: number; c: number; owner: number }[];
 };
+
+/** P1 egyedül vs P2+P3 | P1+P2 vs P3 egyedül | 4 fő: P1+P2 vs P3+P4 */
+export function teamsForOnlineLayout(layout: OnlineTeamLayoutId, playerCount: number): number[] | undefined {
+  if (layout === 'ffa' || playerCount < 3) return undefined;
+  if (playerCount === 3) {
+    if (layout === '3_1v2') return [0, 1, 1];
+    if (layout === '3_2v1') return [0, 0, 1];
+    return undefined;
+  }
+  if (playerCount === 4 && layout === '4_2v2') return [0, 0, 1, 1];
+  return undefined;
+}
+
+export function isTeamGameState(s: GameState): boolean {
+  return Array.isArray(s.teams) && s.teams.length === s.players.length && s.players.length >= 3;
+}
+
+/** Viewer `viewerIdx` wins if same team as `winnerIdx` (or solo FFA: only exact index). */
+export function viewerSharesWin(teams: number[] | undefined, winnerIdx: number, viewerIdx: number, playerCount: number): boolean {
+  if (!teams || teams.length !== playerCount) return winnerIdx === viewerIdx;
+  return teams[winnerIdx] === teams[viewerIdx];
+}
 
 export function hasWon(p: Player): boolean {
   return (p.goalRow !== undefined && p.r === p.goalRow) ||
          (p.goalCol !== undefined && p.c === p.goalCol);
 }
 
-export function initState(treasureMode = false, playerCount = 2, loadout?: SkillType[]): GameState {
+export function initState(treasureMode = false, playerCount = 2, loadout?: SkillType[], teams?: number[]): GameState {
   const wallCount = playerCount === 4 ? 5 : playerCount === 3 ? 7 : 10;
 
   const players: Player[] = [
@@ -54,6 +83,10 @@ export function initState(treasureMode = false, playerCount = 2, loadout?: Skill
     treasureMode,
     playerCount,
   };
+
+  if (teams && teams.length === playerCount) {
+    state.teams = [...teams];
+  }
 
   if (treasureMode) {
     const treasureCount = playerCount * 2; // 4 / 6 / 8 for 2/3/4 players
@@ -161,6 +194,8 @@ export function cloneS(s: GameState): GameState {
     treasureMode: s.treasureMode,
     playerCount: s.playerCount,
     botPlayers: s.botPlayers ? [...s.botPlayers] : undefined,
+    teams: s.teams ? [...s.teams] : undefined,
+    pendingTeamLayout: s.pendingTeamLayout,
     treasures: s.treasures ? s.treasures.map(t => ({ ...t })) : undefined,
     traps: s.traps ? s.traps.map(t => ({ ...t })) : undefined
   };

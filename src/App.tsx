@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
-import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole } from './game/logic';
+import {
+  GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole,
+  teamsForOnlineLayout, viewerSharesWin, type OnlineTeamLayoutId,
+} from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
@@ -46,6 +49,8 @@ export default function App() {
   const [guestAuthError, setGuestAuthError] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
   const [profile, setProfile] = useState<Profile>(getLocalProfile());
+  /** Honnan nyitották az ÁSZF / adatvédelmi képernyőt (Vissza ide visz). */
+  const [legalReturnView, setLegalReturnView] = useState<'auth' | 'leaderboard'>('auth');
 
   const [onlineGameId, setOnlineGameId] = useState<string | null>(null);
   const [onlineRole, setOnlineRole] = useState(0);
@@ -57,6 +62,8 @@ export default function App() {
   const [playerProfiles, setPlayerProfiles] = useState<Record<number, Profile>>({});
   const [lobbySlotNames, setLobbySlotNames] = useState<Record<number, string>>({});
   const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
+  const [onlineTeamLayout, setOnlineTeamLayout] = useState<OnlineTeamLayoutId>('ffa');
+  const onlineTeamLayoutRef = useRef<OnlineTeamLayoutId>('ffa');
 
   const [leaderboardTab, setLeaderboardTab] = useState<'personal' | 'online'>('personal');
   const [leaderboardData, setLeaderboardData] = useState<Profile[]>([]);
@@ -80,7 +87,7 @@ export default function App() {
   const botSlotsRef = useRef(botSlots);
   const skillLoadoutRef = useRef(skillLoadout);
   // handleWinRef populated after handleWin is defined (see below)
-  const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string) => void>(() => {});
+  const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string, snap?: GameState) => void>(() => {});
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { showWinRef.current = showWin; }, [showWin]);
@@ -92,6 +99,7 @@ export default function App() {
   useEffect(() => { sessionRef.current = session; }, [session]);
   useEffect(() => { botSlotsRef.current = botSlots; }, [botSlots]);
   useEffect(() => { skillLoadoutRef.current = skillLoadout; }, [skillLoadout]);
+  useEffect(() => { onlineTeamLayoutRef.current = onlineTeamLayout; }, [onlineTeamLayout]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
@@ -141,6 +149,13 @@ export default function App() {
     }
   };
 
+  const handleMarketingOptOutChange = useCallback(async (marketingOptOut: boolean) => {
+    setProfile(p => ({ ...p, marketing_opt_out: marketingOptOut }));
+    if (isSupabaseConfigured && session?.user?.id) {
+      await updateDbProfile(session.user.id, { marketing_opt_out: marketingOptOut });
+    }
+  }, [isSupabaseConfigured, session?.user?.id]);
+
   const loadPlayerProfiles = async (gameRow: any, myUserId: string) => {
     const ids: (string | null)[] = [gameRow.player1_id, gameRow.player2_id, gameRow.player3_id, gameRow.player4_id];
     const map: Record<number, Profile> = {};
@@ -184,6 +199,41 @@ export default function App() {
     setRejoinCandidate(null);
   }, []);
 
+  const syncLobbyPendingTeamLayout = useCallback(async (layout: OnlineTeamLayoutId) => {
+    const gid = onlineGameIdRef.current;
+    const row = hostedGameDataRef.current;
+    if (!gid || !row || row.status !== 'waiting' || !isSupabaseConfigured) return;
+    const base = row.state && typeof row.state === 'object' ? row.state : {};
+    const nextState = { ...base, pendingTeamLayout: layout };
+    const { error } = await supabase.from('games').update({ state: nextState }).eq('id', gid);
+    if (!error) setHostedGameData((prev: any) => (prev?.id === gid ? { ...prev, state: nextState } : prev));
+  }, []);
+
+  const handleOnlineTeamLayoutChange = useCallback(
+    async (layout: OnlineTeamLayoutId) => {
+      setOnlineTeamLayout(layout);
+      await syncLobbyPendingTeamLayout(layout);
+    },
+    [syncLobbyPendingTeamLayout]
+  );
+
+  const handleMaxPlayersChange = useCallback(
+    (n: number) => {
+      setMaxPlayers(n);
+      setOnlineTeamLayout((prev) => {
+        let next: OnlineTeamLayoutId = prev;
+        if (n === 2) next = 'ffa';
+        else if (n === 3 && prev === '4_2v2') next = 'ffa';
+        else if (n === 4 && (prev === '3_1v2' || prev === '3_2v1')) next = 'ffa';
+        if (onlineGameIdRef.current && onlineRoleRef.current === 0) {
+          setTimeout(() => void syncLobbyPendingTeamLayout(next), 0);
+        }
+        return next;
+      });
+    },
+    [syncLobbyPendingTeamLayout]
+  );
+
   const handleGuestLogin = async () => {
     setGuestAuthError('');
     if (!isSupabaseConfigured) { setView('menu'); return; }
@@ -205,11 +255,14 @@ export default function App() {
     setView('auth');
   };
 
-  const handleWin = useCallback((winnerIndex: number, _fromRealtime = false, reason = '') => {
+  const handleWin = useCallback((winnerIndex: number, _fromRealtime = false, reason = '', snapState?: GameState) => {
     setShowWin(true);
     setWinnerIdx(winnerIndex);
     setGameState(prev => ({ ...prev, gameOver: true }));
     setWinReason(reason);
+
+    const gs = snapState ?? gameStateRef.current;
+    const n = gs.players?.length ?? 2;
 
     if (isOnlineMode(mode)) {
       const gid = onlineGameIdRef.current;
@@ -224,7 +277,9 @@ export default function App() {
     }
 
     setProfile(p => {
-      const won = isOnlineMode(mode) ? winnerIndex === onlineRole : winnerIndex === 0;
+      const won = isOnlineMode(mode)
+        ? viewerSharesWin(gs.teams, winnerIndex, onlineRole, n)
+        : winnerIndex === 0;
       let newP = { ...p };
       if (isAIMode(mode) || isOnlineMode(mode)) {
         newP = won
@@ -276,7 +331,8 @@ export default function App() {
           // Find winner slot by matching winner_id against all player slots
           const slots = [g.player1_id, g.player2_id, g.player3_id, g.player4_id];
           const winSlot = slots.findIndex((uid: string | null) => uid === g.winner_id);
-          handleWin(winSlot !== -1 ? winSlot : onlineRole, true);
+          const snap = g.state && typeof g.state === 'object' ? (g.state as GameState) : undefined;
+          handleWin(winSlot !== -1 ? winSlot : onlineRole, true, '', snap);
         }
         if (g.status === 'abandoned') {
           resetOnlineSessionAfterMatch();
@@ -350,7 +406,9 @@ export default function App() {
       const treasure = Boolean(g.state?.treasureMode);
       const loadout =
         skillLoadoutRef.current.length > 0 ? [...skillLoadoutRef.current].slice(0, 3) : undefined;
-      let newState = initState(treasure, n, loadout);
+      const layout = (g.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? onlineTeamLayoutRef.current;
+      const teams = teamsForOnlineLayout(layout, n);
+      let newState = initState(treasure, n, loadout, teams);
       const bots = filterBotSlotsForPlayerCount(botSlotsRef.current, n);
       if (bots.length > 0) newState = { ...newState, botPlayers: bots };
       setGameState(newState);
@@ -534,7 +592,14 @@ export default function App() {
     setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null);
     if (difficulty) setAiDifficulty(difficulty);
     if (isOnlineMode(selectedMode)) {
-      setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setPlayerProfiles({}); setBotSlots([]); setHostedGameData(null); return;
+      setMode(selectedMode);
+      setView('lobby');
+      setOnlineGameId(null);
+      setPlayerProfiles({});
+      setBotSlots([]);
+      setHostedGameData(null);
+      setOnlineTeamLayout('ffa');
+      return;
     }
     setMode(selectedMode);
     // Use current loadout from ref to avoid stale closure
@@ -573,7 +638,7 @@ export default function App() {
         advanceTurn(next);
       }
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
-      if (isWin) setTimeout(() => handleWinRef.current(prev.turn), 400);
+      if (isWin) setTimeout(() => handleWinRef.current(prev.turn, false, '', next), 400);
       return next;
     });
     setTimeout(() => setAnimating(false), 350);
@@ -640,7 +705,7 @@ export default function App() {
         advanceTurn(next);
       }
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
-      if (isWin) setTimeout(() => handleWinRef.current(winnerIdx), 400);
+      if (isWin) setTimeout(() => handleWinRef.current(winnerIdx, false, '', next), 400);
       return next;
     });
     setTargetingSkill(null);
@@ -652,7 +717,7 @@ export default function App() {
     setAuthLoading(true);
     // Cancel any stale waiting games before creating a new one
     await cancelMyWaitingGames(session.user.id);
-    const state = initState(mode === 'treasure-online', maxPlayers);
+    const state: GameState = { ...initState(mode === 'treasure-online', maxPlayers), pendingTeamLayout: 'ffa' };
     const { data, error } = await createGame(session.user.id, state, maxPlayers);
     setAuthLoading(false);
     if (data) {
@@ -673,6 +738,8 @@ export default function App() {
       setOnlineRole(slotIndex);
       setGameState(state);
       setHostedGameData(data);
+      const pl = data.state?.pendingTeamLayout as OnlineTeamLayoutId | undefined;
+      if (pl) setOnlineTeamLayout(pl);
       // Stay in lobby; subscription will move to game when host starts
     } else if (error) alert('Hiba a csatlakozáskor: ' + error.message);
     setAuthLoading(false);
@@ -687,7 +754,9 @@ export default function App() {
     const treasure = Boolean(g?.state?.treasureMode ?? mode === 'treasure-online');
     const loadout =
       skillLoadoutRef.current.length > 0 ? [...skillLoadoutRef.current].slice(0, 3) : undefined;
-    let newState = initState(treasure, n, loadout);
+    const layout = (g?.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? onlineTeamLayout;
+    const teams = teamsForOnlineLayout(layout, n);
+    let newState = initState(treasure, n, loadout, teams);
     const bots = filterBotSlotsForPlayerCount(botSlots, n);
     if (bots.length > 0) newState = { ...newState, botPlayers: bots };
     setGameState(newState);
@@ -700,7 +769,7 @@ export default function App() {
     // Only cancel (remove from DB) when leaving the lobby; in-game leave lets
     // remaining players continue with bots driven by the new lowest-role human.
     if (onlineGameId && onlineRole === 0 && viewRef.current === 'lobby') await cancelGame(onlineGameId);
-    setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setView('menu');
+    setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setOnlineTeamLayout('ffa'); setView('menu');
   }, [onlineGameId, onlineRole]);
 
   const handleRejoinGame = useCallback(async (game: any) => {
@@ -726,6 +795,14 @@ export default function App() {
       </div>
     );
   }
+
+  const teamModeOnlineWin =
+    showWin &&
+    isOnlineMode(mode) &&
+    Array.isArray(gameState.teams) &&
+    gameState.teams.length === gameState.players.length &&
+    gameState.players.length >= 3;
+  const iWonOnline = isOnlineMode(mode) && viewerSharesWin(gameState.teams, winnerIdx, onlineRole, gameState.players.length);
 
   return (
     <div className="min-h-screen text-[#f5e6d3] font-['Outfit',sans-serif] overflow-hidden flex flex-col items-center">
@@ -792,8 +869,8 @@ export default function App() {
               guestAuthError={guestAuthError}
               onMagicLink={email => signInWithMagicLink(email)}
               isSupabaseConfigured={isSupabaseConfigured}
-              onTos={() => setView('tos')}
-              onPrivacy={() => setView('privacy')}
+              onTos={() => { setLegalReturnView('auth'); setView('tos'); }}
+              onPrivacy={() => { setLegalReturnView('auth'); setView('privacy'); }}
               onAuthTabChange={() => setGuestAuthError('')}
             />
           )}
@@ -804,25 +881,43 @@ export default function App() {
           )}
           {view === 'tos' && (
             <motion.div key="tos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 w-full max-w-3xl p-6 py-12">
-              <TOS onBack={() => setView('auth')} />
+              <TOS onBack={() => setView(legalReturnView)} />
             </motion.div>
           )}
           {view === 'privacy' && (
             <motion.div key="privacy" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 w-full max-w-3xl p-6 py-12">
-              <PrivacyPolicy onBack={() => setView('auth')} />
+              <PrivacyPolicy onBack={() => setView(legalReturnView)} />
             </motion.div>
           )}
           {view === 'menu' && (
             <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} onStore={() => setView('store')} />
           )}
           {view === 'lobby' && (
-            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
+            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={handleMaxPlayersChange} teamLayout={onlineTeamLayout} onTeamLayoutChange={handleOnlineTeamLayoutChange} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
             <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} easterEgg={activeEgg} onEasterEggCollect={collect} />
           )}
           {view === 'leaderboard' && (
-            <LeaderboardView key="leaderboard" profile={profile} leaderboardData={leaderboardData} tab={leaderboardTab} onTabChange={setLeaderboardTab} onBack={() => setView('menu')} isSupabaseConfigured={isSupabaseConfigured} isAnonymous={session?.user?.is_anonymous ?? true} userEmail={session?.user?.email} onUsernameUpdate={async (username) => { await updateDbProfile(session!.user.id, { username }); setProfile(p => ({ ...p, username })); }} onUpgradeAccount={email => upgradeAnonymousAccount(email)} />
+            <LeaderboardView
+              key="leaderboard"
+              profile={profile}
+              leaderboardData={leaderboardData}
+              tab={leaderboardTab}
+              onTabChange={setLeaderboardTab}
+              onBack={() => setView('menu')}
+              isSupabaseConfigured={isSupabaseConfigured}
+              isAnonymous={session?.user?.is_anonymous ?? true}
+              userEmail={session?.user?.email}
+              onUsernameUpdate={async (username) => {
+                await updateDbProfile(session!.user.id, { username });
+                setProfile(p => ({ ...p, username }));
+              }}
+              onUpgradeAccount={email => upgradeAnonymousAccount(email)}
+              onMarketingOptOutChange={handleMarketingOptOutChange}
+              onOpenTos={() => { setLegalReturnView('leaderboard'); setView('tos'); }}
+              onOpenPrivacy={() => { setLegalReturnView('leaderboard'); setView('privacy'); }}
+            />
           )}
           {view === 'store' && (
             <StoreView
@@ -842,14 +937,16 @@ export default function App() {
                 <Trophy className="w-20 h-20 text-[#f0c866] mx-auto mb-6 drop-shadow-[0_0_15px_rgba(240,200,102,0.5)]" />
                 <h2 className="font-['Cinzel',serif] text-3xl font-bold text-[#f0c866] tracking-widest mb-2">
                   {isOnlineMode(mode)
-                    ? (winnerIdx === onlineRole ? 'Nyertél!' : 'Vesztettél!')
+                    ? teamModeOnlineWin
+                      ? (iWonOnline ? 'A csapatod győzött!' : 'A másik csapat győzött!')
+                      : (iWonOnline ? 'Nyertél!' : 'Vesztettél!')
                     : (`Játékos ${winnerIdx + 1}` + (winnerIdx === 1 && isAIMode(mode) ? ' (Gép)' : '')) + ' Nyert!'}
                 </h2>
                 {winReason && <p className="text-red-400 font-bold mb-2 uppercase tracking-wider">{winReason}</p>}
                 <p className="text-[#a89078] mb-8">
                   {isAIMode(mode) && (winnerIdx === 0 ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
                   {(mode === 'pvp' || mode === 'treasure-pvp') && '+20 XP megszerve!'}
-                  {isOnlineMode(mode) && (winnerIdx === onlineRole ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
+                  {isOnlineMode(mode) && (iWonOnline ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
                 </p>
                 <div className="flex flex-col gap-3">
                   <button onClick={() => startGame(mode)} className="bg-[#f0c866] text-[#1a0f08] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f4d488] transition-colors">Újra</button>

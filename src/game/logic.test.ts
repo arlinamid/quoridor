@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole, type GameState } from './logic';
+import {
+  hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole,
+  teamsForOnlineLayout, viewerSharesWin, cloneS, type GameState,
+} from './logic';
 
 describe('hasWon', () => {
   it('detects goal row', () => {
@@ -154,5 +157,34 @@ describe('MOLE (Vakond)', () => {
     s.players[0].effects = [{ type: 'MOLE', duration: 1 }];
     consumeActiveMole(s.players[0]);
     expect(s.players[0].effects?.some(e => e.type === 'MOLE')).toBe(false);
+  });
+});
+
+describe('online team layout', () => {
+  it('teamsForOnlineLayout maps 3p and 4p presets', () => {
+    expect(teamsForOnlineLayout('ffa', 3)).toBeUndefined();
+    expect(teamsForOnlineLayout('3_1v2', 3)).toEqual([0, 1, 1]);
+    expect(teamsForOnlineLayout('3_2v1', 3)).toEqual([0, 0, 1]);
+    expect(teamsForOnlineLayout('4_2v2', 4)).toEqual([0, 0, 1, 1]);
+  });
+
+  it('initState attaches teams when provided', () => {
+    const t = [0, 1, 1] as const;
+    const s = initState(false, 3, undefined, [...t]);
+    expect(s.teams).toEqual([0, 1, 1]);
+  });
+
+  it('cloneS copies teams', () => {
+    const s = initState(false, 3, undefined, [0, 0, 1]);
+    const c = cloneS(s);
+    expect(c.teams).toEqual([0, 0, 1]);
+    c.teams![0] = 9;
+    expect(s.teams![0]).toBe(0);
+  });
+
+  it('viewerSharesWin: FFA is exact index; team mode shares team id', () => {
+    expect(viewerSharesWin(undefined, 2, 1, 3)).toBe(false);
+    expect(viewerSharesWin([0, 1, 1], 2, 1, 3)).toBe(true);
+    expect(viewerSharesWin([0, 1, 1], 0, 1, 3)).toBe(false);
   });
 });

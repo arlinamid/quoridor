@@ -11,8 +11,11 @@ create table public.profiles (
   wins integer default 0,
   losses integer default 0,
   level integer default 1,
+  marketing_opt_out boolean not null default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Ha a tábla már létezik: alter table public.profiles add column if not exists marketing_opt_out boolean not null default false;
 
 -- Note: If you already created the table, run this instead:
 -- ALTER TABLE public.profiles ADD COLUMN fingerprint text;
