@@ -61,9 +61,9 @@ export function EasterEggFloater({ egg, onCollect }: EasterEggFloaterProps) {
   const [timeLeft, setTimeLeft] = useState(8);
 
   useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => p - 1), 1000);
+    const t = setInterval(() => setTimeLeft(p => Math.max(0, p - 1)), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [egg.type]); // reset when egg type changes (new egg spawned)
 
   return (
     <motion.button

@@ -36,6 +36,7 @@ export default function App() {
   const [targetingSkill, setTargetingSkill] = useState<SkillType | null>(null);
   const [showWin, setShowWin] = useState(false);
   const [winReason, setWinReason] = useState('');
+  const [winnerIdx, setWinnerIdx] = useState(0);
   const [timeLeft, setTimeLeft] = useState(120);
 
   const [session, setSession] = useState<Session | null>(null);
@@ -73,6 +74,8 @@ export default function App() {
   const onlineGameIdRef = useRef(onlineGameId);
   const onlineRoleRef = useRef(onlineRole);
   const sessionRef = useRef(session);
+  const botSlotsRef = useRef(botSlots);
+  const skillLoadoutRef = useRef(skillLoadout);
   // handleWinRef populated after handleWin is defined (see below)
   const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string) => void>(() => {});
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
@@ -84,6 +87,8 @@ export default function App() {
   useEffect(() => { onlineGameIdRef.current = onlineGameId; }, [onlineGameId]);
   useEffect(() => { onlineRoleRef.current = onlineRole; }, [onlineRole]);
   useEffect(() => { sessionRef.current = session; }, [session]);
+  useEffect(() => { botSlotsRef.current = botSlots; }, [botSlots]);
+  useEffect(() => { skillLoadoutRef.current = skillLoadout; }, [skillLoadout]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
@@ -185,6 +190,7 @@ export default function App() {
 
   const handleWin = useCallback((winnerIndex: number, _fromRealtime = false, reason = '') => {
     setShowWin(true);
+    setWinnerIdx(winnerIndex);
     setGameState(prev => ({ ...prev, gameOver: true }));
     setWinReason(reason);
     setProfile(p => {
@@ -219,15 +225,26 @@ export default function App() {
         setHostedGameData(g);
         if (g.status === 'playing' && viewRef.current === 'lobby') {
           if (session) await loadPlayerProfiles(g, session.user.id);
-          setGameState(g.state);
+          // Apply own skill loadout to own player slot when the game starts
+          const gs = { ...g.state };
+          const myRole = onlineRoleRef.current;
+          const myLoadout = skillLoadoutRef.current;
+          if (myLoadout.length > 0 && gs.players?.[myRole]) {
+            gs.players = gs.players.map((p: any, i: number) =>
+              i === myRole ? { ...p, inventory: [...myLoadout].slice(0, 3) } : p
+            );
+          }
+          setGameState(gs);
           setView('game');
         } else if (g.status === 'playing' || g.status === 'waiting') {
           // Non-lobby update: just sync state
           if (g.state && viewRef.current === 'game') setGameState(g.state);
         }
         if (g.status === 'finished' && !showWinRef.current) {
-          const isWinner = g.winner_id === session.user.id;
-          handleWin(isWinner ? onlineRole : (onlineRole === 0 ? 1 : 0), true);
+          // Find winner slot by matching winner_id against all player slots
+          const slots = [g.player1_id, g.player2_id, g.player3_id, g.player4_id];
+          const winSlot = slots.findIndex((uid: string | null) => uid === g.winner_id);
+          handleWin(winSlot !== -1 ? winSlot : onlineRole, true);
         }
         if (g.status === 'abandoned' && !showWinRef.current) {
           setGameState(prev => ({ ...prev, gameOver: true }));
@@ -264,7 +281,10 @@ export default function App() {
           setConnectedUserIds(new Set(Object.keys(channel.presenceState())));
         }
       });
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
+      supabase.removeChannel(channel);
+    };
   }, [mode, onlineGameId, session, onlineRole, handleWin]);
 
   useEffect(() => {
@@ -290,8 +310,11 @@ export default function App() {
       const g = hostedGameDataRef.current;
       if (!g) return;
       const humanFilled = [g.player1_id, g.player2_id, g.player3_id, g.player4_id].filter(Boolean).length;
-      const totalFilled = humanFilled + botSlots.length;
-      if (totalFilled >= 2) await handleStartOnlineGame();
+      const totalFilled = humanFilled + botSlotsRef.current.length; // use ref, not stale closure
+      if (totalFilled >= 2) {
+        const stateWithBots = { ...gameStateRef.current, botPlayers: botSlotsRef.current.length > 0 ? botSlotsRef.current : undefined };
+        await updateGameState(onlineGameIdRef.current!, stateWithBots, 'playing');
+      }
     }, AUTO_START_MS);
     return () => clearTimeout(timer);
   }, [onlineGameId, onlineRole]);
@@ -413,14 +436,18 @@ export default function App() {
   }, [view]); // deps: view only — everything else via refs
 
   const handleEasterEggCollect = useCallback(async (eggType: CollectibleType) => {
-    const { egg_wallet, collected_items } = await collectEasterEgg(
-      session?.user?.id ?? null,
-      eggType
-    );
-    setProfile(p => ({ ...p, egg_wallet, collected_items }));
-    const label = eggType === 'EGG_RAINBOW' ? '🌈 Szivárvány Tojás' : eggType === 'EGG_GOLD' ? '🌟 Arany Tojás' : '🥚 Húsvéti Tojás';
-    setStatusMsg(`${label} gyűjtve! Egyenleg: ${egg_wallet[eggType]} db`);
-    setTimeout(() => setStatusMsg(''), 3000);
+    try {
+      const { egg_wallet, collected_items } = await collectEasterEgg(
+        session?.user?.id ?? null,
+        eggType
+      );
+      setProfile(p => ({ ...p, egg_wallet, collected_items }));
+      const label = eggType === 'EGG_RAINBOW' ? '🌈 Szivárvány Tojás' : eggType === 'EGG_GOLD' ? '🌟 Arany Tojás' : '🥚 Húsvéti Tojás';
+      setStatusMsg(`${label} gyűjtve! Egyenleg: ${egg_wallet[eggType]} db`);
+      setTimeout(() => setStatusMsg(''), 3000);
+    } catch (e) {
+      console.error('Easter egg gyűjtési hiba:', e);
+    }
   }, [session]);
 
   const handlePurchaseSkill = useCallback(async (
@@ -469,10 +496,20 @@ export default function App() {
       setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setPlayerProfiles({}); setBotSlots([]); setHostedGameData(null); return;
     }
     setMode(selectedMode);
-    setGameState(initState(isTreasureMode(selectedMode), 2, skillLoadout.length > 0 ? skillLoadout : undefined));
+    // Use current loadout from ref to avoid stale closure
+    const currentLoadout = skillLoadoutRef.current;
+    setGameState(initState(isTreasureMode(selectedMode), 2, currentLoadout.length > 0 ? currentLoadout : undefined));
     setWallMode(false); setWallOrient('h'); setAnimating(false); setTimeLeft(120);
     setView('game');
-  }, []);
+  }, [onlineGameId]);
+
+  // Start positions indexed by player slot — used for trap teleport-back
+  const PLAYER_START = [
+    { r: 0, c: 4 }, // P0
+    { r: 8, c: 4 }, // P1
+    { r: 4, c: 0 }, // P2
+    { r: 4, c: 8 }, // P3
+  ] as const;
 
   const executeMove = useCallback((r: number, c: number) => {
     setAnimating(true);
@@ -484,18 +521,19 @@ export default function App() {
       const trapIdx = next.traps?.findIndex(t => t.r === r && t.c === c && t.owner !== prev.turn);
       if (trapIdx !== undefined && trapIdx !== -1) {
         next.traps!.splice(trapIdx, 1);
-        next.players[prev.turn].r = prev.turn === 0 ? 0 : 8;
-        next.players[prev.turn].c = 4;
+        const sp = PLAYER_START[prev.turn] ?? PLAYER_START[0];
+        next.players[prev.turn].r = sp.r;
+        next.players[prev.turn].c = sp.c;
         setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
       }
       const isWin = hasWon(next.players[prev.turn]);
       if (!isWin) advanceTurn(next);
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
-      if (isWin) setTimeout(() => handleWin(prev.turn), 400);
+      if (isWin) setTimeout(() => handleWinRef.current(prev.turn), 400);
       return next;
     });
     setTimeout(() => setAnimating(false), 350);
-  }, [handleWin, mode, onlineGameId, session]);
+  }, [mode, onlineGameId, session]);
 
   const executeWall = useCallback((r: number, c: number, orient: 'h' | 'v') => {
     setAnimating(true);
@@ -536,26 +574,38 @@ export default function App() {
     setAnimating(true);
     setGameState(prev => {
       const next = applySkill(prev, skill, target);
+      // applySkill uses players[1 - min(turn,1)] as opponent for SWAP/MAGNET
+      const oppIdx = 1 - Math.min(prev.turn, 1);
       if (skill === 'TELEPORT' || skill === 'SWAP') {
         const p = next.players[prev.turn];
         const ti = next.traps?.findIndex(t => t.r === p.r && t.c === p.c && t.owner !== prev.turn);
-        if (ti !== undefined && ti !== -1) { next.traps!.splice(ti, 1); p.r = prev.turn === 0 ? 0 : 8; p.c = 4; setStatusMsg('Csapdába léptél!'); }
+        if (ti !== undefined && ti !== -1) {
+          next.traps!.splice(ti, 1);
+          const sp = PLAYER_START[prev.turn] ?? PLAYER_START[0];
+          p.r = sp.r; p.c = sp.c;
+          setStatusMsg('Csapdába léptél!');
+        }
       }
       if (skill === 'SWAP' || skill === 'MAGNET') {
-        const o = next.players[1 - prev.turn];
-        const oi = next.traps?.findIndex(t => t.r === o.r && t.c === o.c && t.owner !== (1 - prev.turn));
-        if (oi !== undefined && oi !== -1) { next.traps!.splice(oi, 1); o.r = (1 - prev.turn) === 0 ? 0 : 8; o.c = 4; setStatusMsg('Az ellenfél csapdába lépett!'); }
+        const o = next.players[oppIdx];
+        const oi = next.traps?.findIndex(t => t.r === o.r && t.c === o.c && t.owner !== oppIdx);
+        if (oi !== undefined && oi !== -1) {
+          next.traps!.splice(oi, 1);
+          const sp = PLAYER_START[oppIdx] ?? PLAYER_START[1];
+          o.r = sp.r; o.c = sp.c;
+          setStatusMsg('Az ellenfél csapdába lépett!');
+        }
       }
       const winnerIdx = next.players.findIndex((p) => hasWon(p));
       const isWin = winnerIdx !== -1;
       if (!isWin) advanceTurn(next);
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
-      if (isWin) setTimeout(() => handleWin(winnerIdx), 400);
+      if (isWin) setTimeout(() => handleWinRef.current(winnerIdx), 400);
       return next;
     });
     setTargetingSkill(null);
     setTimeout(() => setAnimating(false), 350);
-  }, [handleWin, mode, onlineGameId, session]);
+  }, [mode, onlineGameId, session]);
 
   const handleCreateOnlineGame = async () => {
     if (!session) return;
@@ -728,14 +778,14 @@ export default function App() {
                 <Trophy className="w-20 h-20 text-[#f0c866] mx-auto mb-6 drop-shadow-[0_0_15px_rgba(240,200,102,0.5)]" />
                 <h2 className="font-['Cinzel',serif] text-3xl font-bold text-[#f0c866] tracking-widest mb-2">
                   {isOnlineMode(mode)
-                    ? (gameState.turn === onlineRole ? 'Nyertél!' : 'Vesztettél!')
-                    : (gameState.turn === 0 ? 'Játékos 1' : (isAIMode(mode) ? 'Gép (AI)' : 'Játékos 2')) + ' Nyert!'}
+                    ? (winnerIdx === onlineRole ? 'Nyertél!' : 'Vesztettél!')
+                    : (`Játékos ${winnerIdx + 1}` + (winnerIdx === 1 && isAIMode(mode) ? ' (Gép)' : '')) + ' Nyert!'}
                 </h2>
                 {winReason && <p className="text-red-400 font-bold mb-2 uppercase tracking-wider">{winReason}</p>}
                 <p className="text-[#a89078] mb-8">
-                  {isAIMode(mode) && (gameState.turn === 0 ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
+                  {isAIMode(mode) && (winnerIdx === 0 ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
                   {(mode === 'pvp' || mode === 'treasure-pvp') && '+20 XP megszerve!'}
-                  {isOnlineMode(mode) && (gameState.turn === onlineRole ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
+                  {isOnlineMode(mode) && (winnerIdx === onlineRole ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
                 </p>
                 <div className="flex flex-col gap-3">
                   <button onClick={() => startGame(mode)} className="bg-[#f0c866] text-[#1a0f08] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f4d488] transition-colors">Újra</button>
