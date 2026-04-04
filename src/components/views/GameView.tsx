@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { EasterEggFloater } from '../EasterEggOverlay';
+import { CollectibleType } from '../../lib/types';
 import {
   Bot, Zap, Hammer, SkipForward, Pickaxe, Flame,
   Shield, Plus, Magnet, Crosshair, ArrowLeftRight, Lock,
@@ -131,6 +133,8 @@ interface GameViewProps {
   onDig: () => void;
   onNewGame: () => void;
   onMenu: () => void;
+  easterEgg?: { type: CollectibleType; x: number; y: number } | null;
+  onEasterEggCollect?: () => void;
 }
 
 export function GameView({
@@ -138,6 +142,7 @@ export function GameView({
   timeLeft, onlineRole, profile, playerProfiles,
   onToggleWallMode, onToggleWallOrient, onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
+  easterEgg, onEasterEggCollect,
 }: GameViewProps) {
   const playerCount = gameState.players.length;
   const botPlayers = gameState.botPlayers ?? [];
@@ -313,6 +318,12 @@ export function GameView({
       </div>
 
       <div className="h-6 text-sm text-[#f0c866] animate-pulse text-center">{statusMsg}</div>
+
+      <AnimatePresence>
+        {easterEgg && onEasterEggCollect && (
+          <EasterEggFloater egg={easterEgg} onCollect={onEasterEggCollect} />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

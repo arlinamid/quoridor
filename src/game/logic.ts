@@ -35,11 +35,11 @@ export function hasWon(p: Player): boolean {
          (p.goalCol !== undefined && p.c === p.goalCol);
 }
 
-export function initState(treasureMode = false, playerCount = 2): GameState {
+export function initState(treasureMode = false, playerCount = 2, loadout?: SkillType[]): GameState {
   const wallCount = playerCount === 4 ? 5 : playerCount === 3 ? 7 : 10;
 
   const players: Player[] = [
-    { r: 0, c: 4, walls: wallCount, goalRow: 8, inventory: [], effects: [] },
+    { r: 0, c: 4, walls: wallCount, goalRow: 8, inventory: loadout ? [...loadout].slice(0, 3) : [], effects: [] },
     { r: 8, c: 4, walls: wallCount, goalRow: 0, inventory: [], effects: [] },
   ];
   if (playerCount >= 3) players.push({ r: 4, c: 0, walls: wallCount, goalCol: 8, inventory: [], effects: [] });

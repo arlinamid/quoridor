@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Cpu, Globe, BookOpen, ArrowLeft, Sword, Map } from 'lucide-react';
+import { User, Cpu, Globe, BookOpen, ArrowLeft, Sword, Map, ShoppingBag } from 'lucide-react';
 import { GameMode } from '../../lib/types';
 
 type MenuStep = 'main' | '1v1' | 'ai' | 'ai-difficulty' | 'multiplayer';
@@ -8,6 +8,7 @@ type MenuStep = 'main' | '1v1' | 'ai' | 'ai-difficulty' | 'multiplayer';
 interface MenuViewProps {
   onStartGame: (mode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => void;
   onRules: () => void;
+  onStore: () => void;
 }
 
 const BTN = "group relative overflow-hidden bg-[#1a0f08]/85 backdrop-blur-md border border-[#f0c866]/35 text-[#f0c866] font-['Cinzel',serif] font-bold py-4 px-8 tracking-[3px] transition-all hover:border-[#f0c866] hover:shadow-[0_0_40px_rgba(240,200,102,0.2),inset_0_0_30px_rgba(240,200,102,0.05)] hover:-translate-y-0.5";
@@ -23,7 +24,7 @@ const stepVariants = {
 };
 const trans = { duration: 0.18 };
 
-export function MenuView({ onStartGame, onRules }: MenuViewProps) {
+export function MenuView({ onStartGame, onRules, onStore }: MenuViewProps) {
   const [step, setStep] = useState<MenuStep>('main');
   const [pendingTreasure, setPendingTreasure] = useState(false);
 
@@ -60,6 +61,7 @@ export function MenuView({ onStartGame, onRules }: MenuViewProps) {
             <Btn label="1 vs Gép" icon={<Cpu size={18} />} onClick={() => setStep('ai')} />
             <Btn label="Multiplayer" icon={<Globe size={18} />} onClick={() => setStep('multiplayer')} />
             <Btn label="Szabályok" icon={<BookOpen size={18} />} onClick={onRules} />
+            <Btn label="Áruház" icon={<ShoppingBag size={18} />} onClick={onStore} />
           </motion.div>
         );
 

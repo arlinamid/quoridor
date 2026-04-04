@@ -10,6 +10,11 @@ import {
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
 import { Rules } from './components/Rules';
+import { StoreView } from './components/views/StoreView';
+import { SessionWarning } from './components/SessionWarning';
+import { useEasterEggSpawner } from './components/EasterEggOverlay';
+import { CollectedItem } from './lib/types';
+import { saveSkillLoadout, addCollectedItem, getLocalSkillLoadout, getLocalCollectedItems } from './lib/supabase';
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { GameMode, View, isOnlineMode, isTreasureMode, isAIMode } from './lib/types';
@@ -51,6 +56,11 @@ export default function App() {
 
   const [leaderboardTab, setLeaderboardTab] = useState<'personal' | 'online'>('personal');
   const [leaderboardData, setLeaderboardData] = useState<Profile[]>([]);
+
+  const [skillLoadout, setSkillLoadout] = useState<SkillType[]>(() => {
+    // Will be overridden by profile once loaded
+    return getLocalSkillLoadout() ?? [];
+  });
 
   const gameStateRef = useRef(gameState);
   const viewRef = useRef(view);
@@ -117,7 +127,10 @@ export default function App() {
 
   const loadProfile = async (userId: string) => {
     const dbProfile = await getDbProfile(userId);
-    if (dbProfile) setProfile(dbProfile);
+    if (dbProfile) {
+      setProfile(dbProfile);
+      if (dbProfile.skill_loadout) setSkillLoadout(dbProfile.skill_loadout);
+    }
   };
 
   const loadPlayerProfiles = async (gameRow: any, myUserId: string) => {
@@ -399,6 +412,42 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view]); // deps: view only — everything else via refs
 
+  const handleEasterEggCollect = useCallback(async (item: CollectedItem) => {
+    if (session?.user?.id && isSupabaseConfigured) {
+      await addCollectedItem(session.user.id, item);
+      setProfile(p => ({
+        ...p,
+        collected_items: [...(p.collected_items ?? []), item],
+      }));
+    } else {
+      // localStorage fallback
+      const items = getLocalCollectedItems();
+      items.push(item);
+      localStorage.setItem('quoridor_collected_items', JSON.stringify(items));
+    }
+    setStatusMsg(`🥚 Easter egg gyűjtve: ${item.type === 'EGG_RAINBOW' ? '🌈 Szivárvány Tojás' : item.type === 'EGG_GOLD' ? '🌟 Arany Tojás' : '🥚 Húsvéti Tojás'}!`);
+    setTimeout(() => setStatusMsg(''), 3000);
+  }, [session]);
+
+  const { activeEgg, trySpawn, collect } = useEasterEggSpawner(
+    view === 'game' && !gameState.gameOver,
+    handleEasterEggCollect
+  );
+
+  useEffect(() => {
+    if (view === 'game' && !gameState.gameOver) {
+      trySpawn();
+    }
+  }, [gameState.turn, view]);
+
+  const handleSaveLoadout = useCallback(async (loadout: SkillType[]) => {
+    setSkillLoadout(loadout);
+    await saveSkillLoadout(session?.user?.id ?? null, loadout);
+    if (session?.user?.id) {
+      setProfile(p => ({ ...p, skill_loadout: loadout }));
+    }
+  }, [session]);
+
   const startGame = useCallback((selectedMode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => {
     if (isOnlineMode(selectedMode) && onlineGameId) {
       alert('Már bent vagy egy online játékban! Előbb lépj ki belőle.');
@@ -410,7 +459,7 @@ export default function App() {
       setMode(selectedMode); setView('lobby'); setOnlineGameId(null); setPlayerProfiles({}); setBotSlots([]); setHostedGameData(null); return;
     }
     setMode(selectedMode);
-    setGameState(initState(isTreasureMode(selectedMode)));
+    setGameState(initState(isTreasureMode(selectedMode), 2, skillLoadout.length > 0 ? skillLoadout : undefined));
     setWallMode(false); setWallOrient('h'); setAnimating(false); setTimeLeft(120);
     setView('game');
   }, []);
@@ -510,7 +559,6 @@ export default function App() {
       setOnlineGameId(data.id);
       setOnlineRole(0);
       setGameState(state);
-      setOpponent(null);
       setHostedGameData(data);
     } else if (error) alert('Hiba a játék létrehozásakor: ' + error.message);
   };
@@ -595,6 +643,8 @@ export default function App() {
           </div>
         )}
 
+        <SessionWarning />
+
         {/* Rejoin banner — shown on menu when an active game is detected */}
         {view === 'menu' && rejoinCandidate && (
           <motion.div
@@ -639,16 +689,24 @@ export default function App() {
             </motion.div>
           )}
           {view === 'menu' && (
-            <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} />
+            <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} onStore={() => setView('store')} />
           )}
           {view === 'lobby' && (
             <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
-            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} />
+            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} easterEgg={activeEgg} onEasterEggCollect={collect} />
           )}
           {view === 'leaderboard' && (
             <LeaderboardView key="leaderboard" profile={profile} leaderboardData={leaderboardData} tab={leaderboardTab} onTabChange={setLeaderboardTab} onBack={() => setView('menu')} isSupabaseConfigured={isSupabaseConfigured} isAnonymous={session?.user?.is_anonymous ?? true} userEmail={session?.user?.email} onUsernameUpdate={async (username) => { await updateDbProfile(session!.user.id, { username }); setProfile(p => ({ ...p, username })); }} onUpgradeAccount={email => upgradeAnonymousAccount(email)} />
+          )}
+          {view === 'store' && (
+            <StoreView
+              key="store"
+              profile={profile}
+              onBack={() => setView('menu')}
+              onSaveLoadout={handleSaveLoadout}
+            />
           )}
         </AnimatePresence>
 

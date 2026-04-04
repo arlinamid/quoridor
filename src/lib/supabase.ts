@@ -17,6 +17,8 @@ export type Profile = {
   wins: number;
   losses: number;
   level: number;
+  collected_items?: import('./types').CollectedItem[];
+  skill_loadout?: import('../game/logic').SkillType[] | null;
 };
 
 // Local storage fallback for gamification if Supabase is not configured
@@ -165,6 +167,40 @@ export const updateGameState = async (gameId: string, state: any, status: string
   const payload: any = { state, status };
   if (winnerId) payload.winner_id = winnerId;
   await supabase.from('games').update(payload).eq('id', gameId);
+};
+
+/** Add a collected Easter egg or item to the user's profile. */
+export const addCollectedItem = async (userId: string, item: import('./types').CollectedItem) => {
+  if (!isSupabaseConfigured) {
+    // localStorage fallback
+    const stored = JSON.parse(localStorage.getItem('quoridor_collected_items') || '[]');
+    stored.push(item);
+    localStorage.setItem('quoridor_collected_items', JSON.stringify(stored));
+    return;
+  }
+  // Append to JSONB array atomically
+  await supabase.rpc('append_collected_item', { user_id: userId, item });
+};
+
+/** Save the user's skill loadout (up to 2 skills, or 3 for Gamepass). */
+export const saveSkillLoadout = async (userId: string | null, loadout: import('../game/logic').SkillType[]) => {
+  if (!isSupabaseConfigured || !userId) {
+    localStorage.setItem('quoridor_skill_loadout', JSON.stringify(loadout));
+    return;
+  }
+  await supabase.from('profiles').update({ skill_loadout: loadout }).eq('id', userId);
+};
+
+/** Get skill loadout from local storage (fallback). */
+export const getLocalSkillLoadout = (): import('../game/logic').SkillType[] | null => {
+  const stored = localStorage.getItem('quoridor_skill_loadout');
+  return stored ? JSON.parse(stored) : null;
+};
+
+/** Get collected items from local storage (fallback). */
+export const getLocalCollectedItems = (): import('./types').CollectedItem[] => {
+  const stored = localStorage.getItem('quoridor_collected_items');
+  return stored ? JSON.parse(stored) : [];
 };
 
 // --- Server-side XP (Edge Function) ---
