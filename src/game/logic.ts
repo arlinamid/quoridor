@@ -1,5 +1,10 @@
 export type SkillType = 'TELEPORT' | 'HAMMER' | 'SKIP' | 'MOLE' | 'DYNAMITE' | 'SHIELD' | 'WALLS' | 'MAGNET' | 'TRAP' | 'SWAP';
 
+/** Kincsmód: egyszerre max. ennyi skill fér a készleten (5. szinttől 3 = Gamepass, alatta 2). */
+export function maxTreasureInventorySlots(level: number): number {
+  return (level ?? 1) >= 5 ? 3 : 2;
+}
+
 export type PlayerEffect = {
   type: 'MOLE' | 'SHIELD' | 'SKIP';
   duration: number;

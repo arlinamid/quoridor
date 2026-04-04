@@ -6,7 +6,7 @@ import {
   Bot, Zap, Hammer, SkipForward, Pickaxe, Flame,
   Shield, Plus, Magnet, Crosshair, ArrowLeftRight, Lock,
 } from 'lucide-react';
-import { GameState, SkillType, isTeamGameState } from '../../game/logic';
+import { GameState, SkillType, isTeamGameState, maxTreasureInventorySlots } from '../../game/logic';
 import { Profile } from '../../lib/supabase';
 import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/types';
 import { QuoridorBoard } from '../QuoridorBoard';
@@ -184,6 +184,9 @@ export function GameView({
   };
 
   const isLocalTurn = canActPlayer(gameState.turn);
+  const treasureInvCap = maxTreasureInventorySlots(profile.level ?? 1);
+  const turnInventoryLen = gameState.players[gameState.turn]?.inventory?.length ?? 0;
+  const canDigTreasure = turnInventoryLen < treasureInvCap;
 
   return (
     <motion.div
@@ -263,6 +266,7 @@ export function GameView({
       {isTreasureMode(mode) && (
         <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-3">
           {isLocalTurn &&
+           canDigTreasure &&
            gameState.treasures?.some(t =>
              t.r === gameState.players[gameState.turn].r &&
              t.c === gameState.players[gameState.turn].c

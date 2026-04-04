@@ -107,7 +107,7 @@ export function RulesScrollableContent() {
           Speciális képességek (skillek)
         </h3>
         <p className="text-sm mb-4 leading-relaxed">
-          A képességeket az <strong>Áruházban</strong> vásárolhatod meg tojás-valutáért, majd a <strong>Loadout</strong> fülön választod ki, melyek induljanak veled (lásd bolt szekció). Egy körben egy skill; a használat <strong>elfogyasztja</strong> a példányt a készletedből (kivéve, ha a kód másként kezeli — pl. WALLS azonnal növeli a falaidat).
+          A képességeket az <strong>Áruházban</strong> vásárolhatod meg tojás-valutáért, majd a <strong>Loadout</strong> fülön választod ki, melyek induljanak veled (lásd bolt szekció). <strong>Egy megvásárolt skill = egy felhasználás:</strong> ha elhasználtad a meccsen, többé nincs a birtokodban — <strong>újra meg kell venni</strong>. Típusonként egyszerre csak <strong>egy darab</strong> lehet nálad (és a készleteden sem lehet két azonos típus). Egy körben egy skill; a használat <strong>elfogyasztja</strong> a példányt a készletedből (pl. WALLS azonnal növeli a falaidat, majd a kártya eltűnik).
         </p>
         <div className="overflow-x-auto rounded-lg border border-[#f0c866]/20">
           <table className="w-full text-sm text-left border-collapse">
@@ -143,7 +143,7 @@ export function RulesScrollableContent() {
         </h3>
         <ul className="list-disc list-inside space-y-2 ml-4 leading-relaxed">
           <li><strong>Bolt:</strong> skillek megvásárlása <strong>🥚 Alap</strong>, <strong>🌟 Arany</strong> vagy <strong>🌈 Szivárvány</strong> tojásokért (árak a játékban a kártyákon).</li>
-          <li><strong>Loadout:</strong> csak a <strong>megvásárolt</strong> skillekből választhatsz induló készletet. Alapból <strong>2</strong> fér el; <strong>5. szint</strong> felett <strong>Gamepass</strong>: <strong>3</strong> hely.</li>
+          <li><strong>Loadout:</strong> csak olyan skillekből, amiket <strong>épp birtokolsz</strong> (megvásárolt, még fel nem használt példány). Alapból <strong>2</strong> fér el; <strong>5. szint</strong> felett <strong>Gamepass</strong>: <strong>3</strong> hely. Meccsen a használat után a skill kikerül a birtoklásodból és a loadoutodból.</li>
           <li><strong>Tojások:</strong> játék közben jelenhetnek meg (ritkaság eseménytől függően); kattintással gyűjtöd, egyenleg az adatbázisban / lokálisan.</li>
           <li><strong>Gyűjtemény</strong> tab: egyenlegek, megvásárolt skillek, gyűjtési előzmények.</li>
         </ul>

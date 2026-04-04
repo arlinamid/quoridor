@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type PostgrestError } from '@supabase/supabase-js';
 import { profileSelectTable } from './profileAccess';
 
 // We use environment variables for Supabase connection.
@@ -244,12 +244,13 @@ export const updateGameState = async (
   status: string = 'playing',
   winnerId?: string,
   patch?: { max_players?: number }
-) => {
-  if (!isSupabaseConfigured) return;
+): Promise<{ error: PostgrestError | null }> => {
+  if (!isSupabaseConfigured) return { error: null };
   const payload: any = { state, status };
   if (winnerId) payload.winner_id = winnerId;
   if (patch?.max_players !== undefined) payload.max_players = patch.max_players;
-  await supabase.from('games').update(payload).eq('id', gameId);
+  const { error } = await supabase.from('games').update(payload).eq('id', gameId);
+  return { error };
 };
 
 /** Ha a sor még `playing`, beállítja `finished` + winner — így a getActiveGame nem ad vissza „folyó” meccset, ha egy kliens nem küldte el a teljes state frissítést. */
@@ -362,6 +363,41 @@ export const purchaseSkill = async (
     egg_wallet: profile?.egg_wallet,
     owned_skills: profile?.owned_skills ?? [],
   };
+};
+
+/**
+ * Kincsmódban: a megvásárolt skill egyszer használatos — felhasználáskor törlődik az owned_skills-ból
+ * és a skill_loadoutból is (újra vásárolható). Ha a skill nincs owned-ban (csak ásással került be), nem módosít profilt.
+ */
+export const persistConsumedPurchasedSkill = async (
+  userId: string | null,
+  skill: import('../game/logic').SkillType,
+  owned: import('../game/logic').SkillType[] | undefined,
+  loadout: import('../game/logic').SkillType[] | undefined
+): Promise<{ owned_skills: import('../game/logic').SkillType[]; skill_loadout: import('../game/logic').SkillType[] } | null> => {
+  const o = owned ?? [];
+  if (!o.includes(skill)) return null;
+  const nextOwned = o.filter(s => s !== skill);
+  const nextLoadout = (loadout ?? []).filter(s => s !== skill);
+
+  if (!isSupabaseConfigured || !userId) {
+    localStorage.setItem(LOCAL_OWNED_KEY, JSON.stringify(nextOwned));
+    localStorage.setItem(LOCAL_LOADOUT_KEY, JSON.stringify(nextLoadout));
+    return { owned_skills: nextOwned, skill_loadout: nextLoadout };
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      owned_skills: nextOwned,
+      skill_loadout: nextLoadout.length > 0 ? nextLoadout : null,
+    })
+    .eq('id', userId);
+  if (error) {
+    console.error('consume owned skill persist error:', error);
+    return null;
+  }
+  return { owned_skills: nextOwned, skill_loadout: nextLoadout };
 };
 
 /** Save the user's skill loadout (up to 2 skills, or 3 for Gamepass). */

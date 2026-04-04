@@ -4,11 +4,13 @@ import { ThreeBackground } from './components/ThreeBackground';
 import {
   GameState, initState, mmRoot, evHard, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, trapAffectsVictim, type OnlineTeamLayoutId,
+  maxTreasureInventorySlots,
 } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
   createGame, joinGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, ensureGameMarkedFinished, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
+  saveSkillLoadout, collectEasterEgg, purchaseSkill, getLocalSkillLoadout, persistConsumedPurchasedSkill, getLocalOwnedSkills,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -17,7 +19,6 @@ import { StoreView } from './components/views/StoreView';
 import { SessionWarning } from './components/SessionWarning';
 import { useEasterEggSpawner } from './components/EasterEggOverlay';
 import { CollectibleType } from './lib/types';
-import { saveSkillLoadout, collectEasterEgg, purchaseSkill, getLocalSkillLoadout } from './lib/supabase';
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { GameMode, View, isOnlineMode, isTreasureMode, isAIMode } from './lib/types';
@@ -88,6 +89,7 @@ export default function App() {
   const sessionRef = useRef(session);
   const botSlotsRef = useRef(botSlots);
   const skillLoadoutRef = useRef(skillLoadout);
+  const profileRef = useRef(profile);
   // handleWinRef populated after handleWin is defined (see below)
   const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string, snap?: GameState) => void>(() => {});
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
@@ -107,6 +109,7 @@ export default function App() {
   useEffect(() => { sessionRef.current = session; }, [session]);
   useEffect(() => { botSlotsRef.current = botSlots; }, [botSlots]);
   useEffect(() => { skillLoadoutRef.current = skillLoadout; }, [skillLoadout]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { onlineTeamLayoutRef.current = onlineTeamLayout; }, [onlineTeamLayout]);
 
   useEffect(() => {
@@ -421,7 +424,15 @@ export default function App() {
       if (bots.length > 0) newState = { ...newState, botPlayers: bots };
       setGameState(newState);
       setMaxPlayers(n);
-      await updateGameState(onlineGameIdRef.current!, newState, 'playing', undefined, { max_players: n });
+      const { error } = await updateGameState(onlineGameIdRef.current!, newState, 'playing', undefined, { max_players: n });
+      if (error) return;
+      const merged = g ? { ...g, status: 'playing', state: newState, max_players: n } : null;
+      const uid = sessionRef.current?.user?.id;
+      if (merged && uid) {
+        setHostedGameData(merged);
+        await loadPlayerProfiles(merged, uid);
+      }
+      setView('game');
     }, AUTO_START_MS);
     return () => clearTimeout(timer);
   }, [onlineGameId, onlineRole]);
@@ -680,18 +691,32 @@ export default function App() {
   }, [mode, onlineGameId]);
 
   const executeDig = useCallback(() => {
+    const cap = maxTreasureInventorySlots(profile.level);
+    const actor = gameStateRef.current.players[gameStateRef.current.turn];
+    if ((actor.inventory?.length ?? 0) >= cap) {
+      setStatusMsg(hu.app.digInventoryFull);
+      return;
+    }
     setAnimating(true);
     setGameState(prev => {
       const next = cloneS(prev);
       const p = next.players[next.turn];
+      const innerCap = maxTreasureInventorySlots(profile.level);
       const tIdx = next.treasures?.findIndex(t => t.r === p.r && t.c === p.c);
       if (tIdx !== undefined && tIdx !== -1) {
-        next.treasures!.splice(tIdx, 1);
         const SKILLS: SkillType[] = ['TELEPORT', 'HAMMER', 'SKIP', 'MOLE', 'DYNAMITE', 'SHIELD', 'WALLS', 'MAGNET', 'TRAP', 'SWAP'];
-        const found = SKILLS[Math.floor(Math.random() * SKILLS.length)];
         if (!p.inventory) p.inventory = [];
-        if (p.inventory.length < 2) { p.inventory.push(found); setStatusMsg(hu.app.digFound(found)); }
-        else setStatusMsg(hu.app.digFull(found));
+        const have = new Set(p.inventory);
+        const found = SKILLS.find(s => !have.has(s));
+        if (found && p.inventory.length < innerCap) {
+          next.treasures!.splice(tIdx, 1);
+          p.inventory.push(found);
+          setStatusMsg(hu.app.digFound(found));
+        } else if (!found) {
+          setStatusMsg(hu.app.digDuplicateTypes);
+        } else {
+          setStatusMsg(hu.app.digInventoryFull);
+        }
       }
       consumeActiveMole(next.players[prev.turn]);
       advanceTurn(next);
@@ -699,7 +724,7 @@ export default function App() {
       return next;
     });
     setTimeout(() => setAnimating(false), 350);
-  }, [mode, onlineGameId]);
+  }, [mode, onlineGameId, profile.level]);
 
   const executeSkill = useCallback((skill: SkillType, target?: { r: number; c: number }) => {
     let skillApplyFailed = false;
@@ -742,6 +767,17 @@ export default function App() {
       if (skill === 'TRAP') setStatusMsg(hu.app.trapInvalid);
       return;
     }
+    if (isTreasureMode(modeRef.current)) {
+      const uid = sessionRef.current?.user?.id ?? null;
+      const prof = profileRef.current;
+      const owned = prof.owned_skills ?? getLocalOwnedSkills();
+      const loadout = prof.skill_loadout ?? skillLoadoutRef.current;
+      void persistConsumedPurchasedSkill(uid, skill, owned, loadout).then((next) => {
+        if (!next) return;
+        setProfile(p => ({ ...p, owned_skills: next.owned_skills, skill_loadout: next.skill_loadout }));
+        setSkillLoadout(next.skill_loadout);
+      });
+    }
     setTargetingSkill(null);
     setTimeout(() => setAnimating(false), 350);
   }, [mode, onlineGameId, session]);
@@ -780,7 +816,7 @@ export default function App() {
   };
 
   const handleStartOnlineGame = async () => {
-    if (!onlineGameId || onlineRole !== 0) return;
+    if (!onlineGameId || onlineRole !== 0 || !session) return;
     const g = hostedGameData;
     const lobbyCap = Math.min(4, Math.max(2, g?.max_players ?? maxPlayers));
     const n = countFilledOnlineSlots(g, lobbyCap, botSlots);
@@ -795,7 +831,18 @@ export default function App() {
     if (bots.length > 0) newState = { ...newState, botPlayers: bots };
     setGameState(newState);
     setMaxPlayers(n);
-    await updateGameState(onlineGameId, newState, 'playing', undefined, { max_players: n });
+    const { error } = await updateGameState(onlineGameId, newState, 'playing', undefined, { max_players: n });
+    if (error) {
+      alert(hu.app.startOnlineGameError(error.message));
+      return;
+    }
+    // Ne csak Realtime-ra várjunk — ha a postgres_changes nem jön át, a host egyébként „beragadna” a lobbiban.
+    const merged = g ? { ...g, status: 'playing', state: newState, max_players: n } : null;
+    if (merged) {
+      setHostedGameData(merged);
+      await loadPlayerProfiles(merged, session.user.id);
+    }
+    setView('game');
   };
 
   const handleLeaveOnlineGame = useCallback(async () => {
