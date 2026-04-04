@@ -58,11 +58,21 @@ export default function App() {
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [connectedUserIds, setConnectedUserIds] = useState<Set<string>>(new Set());
   const connectedUserIdsRef = useRef(connectedUserIds);
+  const modeRef = useRef(mode);
+  const onlineGameIdRef = useRef(onlineGameId);
+  const onlineRoleRef = useRef(onlineRole);
+  const sessionRef = useRef(session);
+  // handleWinRef populated after handleWin is defined (see below)
+  const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string) => void>(() => {});
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { showWinRef.current = showWin; }, [showWin]);
   useEffect(() => { hostedGameDataRef.current = hostedGameData; }, [hostedGameData]);
   useEffect(() => { connectedUserIdsRef.current = connectedUserIds; }, [connectedUserIds]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { onlineGameIdRef.current = onlineGameId; }, [onlineGameId]);
+  useEffect(() => { onlineRoleRef.current = onlineRole; }, [onlineRole]);
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
@@ -154,6 +164,7 @@ export default function App() {
       return newP;
     });
   }, [mode, session, onlineRole]);
+  useEffect(() => { handleWinRef.current = handleWin; }, [handleWin]);
 
   useEffect(() => {
     if (!isOnlineMode(mode) || !onlineGameId || !isSupabaseConfigured || !session) return;
@@ -301,24 +312,62 @@ export default function App() {
     return () => clearInterval(id);
   }, [view, mode, onlineGameId, session, gameState.gameOver]);
 
+  // Single interval per game session — reads live state via refs, no stale closures.
+  // Recreated only when switching view (enter/leave game screen).
   useEffect(() => {
-    if (view !== 'game' || gameState.gameOver || !gameState.lastMoveTime) {
-      if (view === 'game' && !gameState.lastMoveTime) setTimeLeft(120);
-      return;
-    }
+    if (view !== 'game') return;
+    setTimeLeft(120);
     const interval = setInterval(() => {
-      const remaining = Math.max(0, 120 - Math.floor((Date.now() - gameState.lastMoveTime!) / 1000));
+      const gs = gameStateRef.current;
+      if (!gs.lastMoveTime || gs.gameOver || showWinRef.current) {
+        if (!gs.lastMoveTime) setTimeLeft(120);
+        return;
+      }
+      const remaining = Math.max(0, 120 - Math.floor((Date.now() - gs.lastMoveTime) / 1000));
       setTimeLeft(remaining);
-      if (remaining === 0 && !gameState.gameOver) {
-        const winner = 1 - gameState.turn;
-        if (isOnlineMode(mode) && onlineGameId && onlineRole === winner) {
-          updateGameState(onlineGameId, { ...gameState, gameOver: true }, 'finished', session?.user?.id);
+      if (remaining > 0) return;
+
+      const currentMode = modeRef.current;
+      const currentGameId = onlineGameIdRef.current;
+      const currentRole = onlineRoleRef.current;
+      const currentSession = sessionRef.current;
+      const n = gs.players.length;
+
+      if (n <= 2) {
+        // 2-player: timed-out player loses
+        const winner = 1 - gs.turn;
+        if (isOnlineMode(currentMode) && currentGameId && currentRole === winner) {
+          updateGameState(currentGameId, { ...gs, gameOver: true }, 'finished', currentSession?.user?.id);
         }
-        handleWin(winner, false, 'Időtúllépés miatt!');
+        handleWinRef.current(winner, false, 'Időtúllépés miatt!');
+      } else {
+        // 3-4 player: skip timed-out player's turn, reset clock
+        if (isOnlineMode(currentMode) && currentGameId && currentRole === gs.turn) {
+          setGameState(prev => {
+            if (prev.gameOver || showWinRef.current) return prev;
+            const next = cloneS(prev);
+            next.lastMoveTime = Date.now();
+            advanceTurn(next);
+            updateGameState(currentGameId!, next, 'playing');
+            return next;
+          });
+          setStatusMsg(`P${gs.turn + 1} időtúllépés — kör kihagyva!`);
+          setTimeout(() => setStatusMsg(''), 2500);
+        } else if (!isOnlineMode(currentMode)) {
+          setGameState(prev => {
+            if (prev.gameOver || showWinRef.current) return prev;
+            const next = cloneS(prev);
+            next.lastMoveTime = Date.now();
+            advanceTurn(next);
+            return next;
+          });
+          setStatusMsg(`P${gs.turn + 1} időtúllépés — kör kihagyva!`);
+          setTimeout(() => setStatusMsg(''), 2500);
+        }
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [view, gameState, mode, onlineGameId, onlineRole, session, handleWin]);
+  }, [view]); // deps: view only — everything else via refs
 
   const startGame = useCallback((selectedMode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => {
     if (isOnlineMode(selectedMode) && onlineGameId) {
