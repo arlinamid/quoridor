@@ -32,16 +32,16 @@ type SkillMeta = {
 };
 
 const SKILL_META: Record<SkillType, SkillMeta> = {
-  WALLS:    { icon: <Plus size={22} />,            label: 'Extra Falak',  desc: '+3 fal kerül a készletedbe.',                   color: '#f0c866', eggType: 'EGG_BASIC',   eggCost: 2 },
+  WALLS:    { icon: <Plus size={22} />,            label: 'Extra Falak',  desc: '+2 fal kerül a készletedbe (azonnal).',         color: '#f0c866', eggType: 'EGG_BASIC',   eggCost: 2 },
   HAMMER:   { icon: <Hammer size={22} />,          label: 'Kalapács',     desc: 'Távolítsd el a szomszédos falat.',              color: '#f97316', eggType: 'EGG_BASIC',   eggCost: 3 },
-  SKIP:     { icon: <SkipForward size={22} />,     label: 'Átugrás',      desc: 'Az ellenfél kihagyja a következő körét.',       color: '#facc15', eggType: 'EGG_BASIC',   eggCost: 4 },
-  SHIELD:   { icon: <Shield size={22} />,          label: 'Pajzs',        desc: '3 körre immunis vagy a skillekre.',             color: '#34d399', eggType: 'EGG_GOLD',    eggCost: 1 },
-  MOLE:     { icon: <Pickaxe size={22} />,         label: 'Vakond',       desc: '3 körre átsétálhatsz a falakon.',               color: '#a3e635', eggType: 'EGG_GOLD',    eggCost: 2 },
-  TELEPORT: { icon: <Zap size={22} />,             label: 'Teleport',     desc: 'Ugorj bármely szabad mezőre.',                  color: '#a78bfa', eggType: 'EGG_GOLD',    eggCost: 2 },
-  MAGNET:   { icon: <Magnet size={22} />,          label: 'Mágnes',       desc: 'Az ellenfelet 2 mezővel közelebb húzod.',       color: '#60a5fa', eggType: 'EGG_GOLD',    eggCost: 3 },
+  SKIP:     { icon: <SkipForward size={22} />,     label: 'Átugrás',      desc: 'A következő játékos a körből kimarad (2–4 fő).', color: '#facc15', eggType: 'EGG_BASIC',   eggCost: 4 },
+  SHIELD:   { icon: <Shield size={22} />,          label: 'Pajzs',        desc: '2 saját körön át blokkol bizonyos ellenfél-falakat (2 játékos).', color: '#34d399', eggType: 'EGG_GOLD',    eggCost: 1 },
+  MOLE:     { icon: <Pickaxe size={22} />,         label: 'Vakond',       desc: '1 körön át átsétálhatsz a falakon.',            color: '#a3e635', eggType: 'EGG_GOLD',    eggCost: 2 },
+  TELEPORT: { icon: <Zap size={22} />,             label: 'Teleport',     desc: 'Ugorj egy szabad mezőre (max. 2 cella távolság).', color: '#a78bfa', eggType: 'EGG_GOLD',    eggCost: 2 },
+  MAGNET:   { icon: <Magnet size={22} />,          label: 'Mágnes',       desc: 'Minden ellenfelet feléd húz (vízsz. vagy függ., max. 2 mező).', color: '#60a5fa', eggType: 'EGG_GOLD',    eggCost: 3 },
   TRAP:     { icon: <Crosshair size={22} />,       label: 'Csapda',       desc: 'Helyezz el egy láthatatlan csapdát.',           color: '#f472b6', eggType: 'EGG_GOLD',    eggCost: 3 },
   DYNAMITE: { icon: <Flame size={22} />,           label: 'Dinamit',      desc: 'Felrobbantsz egy 3×3-as területet.',           color: '#ef4444', eggType: 'EGG_RAINBOW', eggCost: 1 },
-  SWAP:     { icon: <ArrowLeftRight size={22} />,  label: 'Csere',        desc: 'Cserélj pozíciót egy másik játékossal.',        color: '#22d3ee', eggType: 'EGG_RAINBOW', eggCost: 2 },
+  SWAP:     { icon: <ArrowLeftRight size={22} />,  label: 'Csere',        desc: 'Véletlenszerű másik játékossal cserélsz helyet.', color: '#22d3ee', eggType: 'EGG_RAINBOW', eggCost: 2 },
 };
 
 const SKILL_ORDER: SkillType[] = [

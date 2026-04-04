@@ -4,6 +4,26 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ---
 
+## [Unreleased] — 2026-04-04 (patch 5)
+
+### Changed — Skillek 2–4 játékosra
+- **SKIP (Átugrás)** — a **`(turn + 1) % n`** játékos kapja a kihagyott kört (körrend szerinti következő), nem egy fix „P0 ellenfél” index.
+- **SWAP (Csere)** — **véletlenszerű** másik játékossal cserél helyet; `applySkill` opcionális **`rng`** paraméter tesztekhez. Visszatérés: `{ state, swapPartner? }`.
+- **MAGNET** — **minden** ellenfelet külön húz a domináns tengely mentén (vízszintes vagy függőleges, max. 2 mező); **foglalt** célmezőnél az adott húzás kimarad.
+- **Teleport** (`QuoridorBoard`) — célcella csak akkor választható, ha **nincs** rajta másik bábu (javítva a `players[1 - turn]` hibás index 3–4 főnél).
+
+### Changed — Csapda & kliens
+- **`executeSkill`** — TELEPORT / SWAP / MAGNET után **minden** bábura lefut a csapdaellenőrzés (nem egyetlen `oppIdx`).
+
+### Changed — Dokumentáció & UI szöveg
+- **Szabályok** (`Rules.tsx`): kibővített leírások (módok, idő, kincs, skillek táblázat, bolt); SKIP / MAGNET / SWAP sorok az új logikának megfelelően.
+- **GameView** / **StoreView** skill tooltip és bolt leírások frissítve.
+
+### Added — Tests
+- **`applySkill`** egységtesztek: SKIP 2p és 4p, SWAP seeded `rng`, MAGNET több ellenfél és ütközés-elutasítás.
+
+---
+
 ## [Unreleased] — 2026-04-04 (patch 4)
 
 ### Security (Supabase)

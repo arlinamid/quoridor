@@ -582,27 +582,18 @@ export default function App() {
   const executeSkill = useCallback((skill: SkillType, target?: { r: number; c: number }) => {
     setAnimating(true);
     setGameState(prev => {
-      const next = applySkill(prev, skill, target);
-      // applySkill uses players[1 - min(turn,1)] as opponent for SWAP/MAGNET
-      const oppIdx = 1 - Math.min(prev.turn, 1);
-      if (skill === 'TELEPORT' || skill === 'SWAP') {
-        const p = next.players[prev.turn];
-        const ti = next.traps?.findIndex(t => t.r === p.r && t.c === p.c && t.owner !== prev.turn);
-        if (ti !== undefined && ti !== -1) {
-          next.traps!.splice(ti, 1);
-          const sp = PLAYER_START[prev.turn] ?? PLAYER_START[0];
-          p.r = sp.r; p.c = sp.c;
-          setStatusMsg('Csapdába léptél!');
-        }
-      }
-      if (skill === 'SWAP' || skill === 'MAGNET') {
-        const o = next.players[oppIdx];
-        const oi = next.traps?.findIndex(t => t.r === o.r && t.c === o.c && t.owner !== oppIdx);
-        if (oi !== undefined && oi !== -1) {
-          next.traps!.splice(oi, 1);
-          const sp = PLAYER_START[oppIdx] ?? PLAYER_START[1];
-          o.r = sp.r; o.c = sp.c;
-          setStatusMsg('Az ellenfél csapdába lépett!');
+      const { state: next } = applySkill(prev, skill, target);
+      if (skill === 'TELEPORT' || skill === 'SWAP' || skill === 'MAGNET') {
+        for (let pi = 0; pi < next.players.length; pi++) {
+          const pawn = next.players[pi];
+          const ti = next.traps?.findIndex(t => t.r === pawn.r && t.c === pawn.c && t.owner !== pi);
+          if (ti !== undefined && ti !== -1) {
+            next.traps!.splice(ti, 1);
+            const sp = PLAYER_START[pi] ?? PLAYER_START[0];
+            pawn.r = sp.r;
+            pawn.c = sp.c;
+            setStatusMsg(pi === prev.turn ? 'Csapdába léptél!' : 'Játékos csapdába lépett — startmező.');
+          }
         }
       }
       const winnerIdx = next.players.findIndex((p) => hasWon(p));

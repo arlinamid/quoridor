@@ -187,17 +187,30 @@ export function bfsDist(s: GameState, pi: number) {
   return Infinity;
 }
 
-export function applySkill(s: GameState, skill: SkillType, target?: { r: number, c: number }): GameState {
+export type ApplySkillResult = {
+  state: GameState;
+  /** Index of the other player in a random SWAP (for trap / UI). */
+  swapPartner?: number;
+};
+
+/**
+ * @param rng — used for SWAP partner pick (deterministic tests can inject a seeded PRNG).
+ */
+export function applySkill(
+  s: GameState,
+  skill: SkillType,
+  target?: { r: number; c: number },
+  rng: () => number = Math.random
+): ApplySkillResult {
   const ns = cloneS(s);
   const p = ns.players[ns.turn];
-  const o = ns.players[1 - Math.min(ns.turn, 1)]; // opponent = player 1 in 2-player, player 1 otherwise
+  let swapPartner: number | undefined;
 
   if (p.inventory) {
     const idx = p.inventory.indexOf(skill);
     if (idx !== -1) p.inventory.splice(idx, 1);
   }
   if (!p.effects) p.effects = [];
-  if (!o.effects) o.effects = [];
 
   switch (skill) {
     case 'TELEPORT':
@@ -209,9 +222,14 @@ export function applySkill(s: GameState, skill: SkillType, target?: { r: number,
         if (widx !== -1) ns.walls.splice(widx, 1);
       }
       break;
-    case 'SKIP':
-      o.effects.push({ type: 'SKIP', duration: 1 });
+    case 'SKIP': {
+      const n = ns.players.length;
+      const nextIdx = (ns.turn + 1) % n;
+      const tgt = ns.players[nextIdx];
+      if (!tgt.effects) tgt.effects = [];
+      tgt.effects.push({ type: 'SKIP', duration: 1 });
       break;
+    }
     case 'MOLE':
       p.effects.push({ type: 'MOLE', duration: 1 });
       break;
@@ -230,9 +248,26 @@ export function applySkill(s: GameState, skill: SkillType, target?: { r: number,
       p.walls += 2;
       break;
     case 'MAGNET': {
-      const dr = p.r - o.r, dc = p.c - o.c;
-      if (Math.abs(dr) > Math.abs(dc)) o.r += Math.sign(dr) * Math.min(2, Math.abs(dr) - 1);
-      else o.c += Math.sign(dc) * Math.min(2, Math.abs(dc) - 1);
+      for (let i = 0; i < ns.players.length; i++) {
+        if (i === ns.turn) continue;
+        const o = ns.players[i];
+        const dr = p.r - o.r, dc = p.c - o.c;
+        if (dr === 0 && dc === 0) continue;
+        let nr = o.r, nc = o.c;
+        if (Math.abs(dr) > Math.abs(dc)) {
+          const step = Math.sign(dr) * Math.min(2, Math.max(0, Math.abs(dr) - 1));
+          if (step !== 0) nr = o.r + step;
+        } else {
+          const step = Math.sign(dc) * Math.min(2, Math.max(0, Math.abs(dc) - 1));
+          if (step !== 0) nc = o.c + step;
+        }
+        if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9) continue;
+        const occupied = ns.players.some((pl, idx) => idx !== i && pl.r === nr && pl.c === nc);
+        if (!occupied) {
+          o.r = nr;
+          o.c = nc;
+        }
+      }
       break;
     }
     case 'TRAP':
@@ -240,13 +275,18 @@ export function applySkill(s: GameState, skill: SkillType, target?: { r: number,
       ns.traps.push({ r: p.r, c: p.c, owner: ns.turn });
       break;
     case 'SWAP': {
+      const candidates = ns.players.map((_, i) => i).filter(i => i !== ns.turn);
+      if (candidates.length === 0) break;
+      const k = candidates[Math.floor(rng() * candidates.length)];
+      const o = ns.players[k];
       const tempR = p.r, tempC = p.c;
       p.r = o.r; p.c = o.c;
       o.r = tempR; o.c = tempC;
+      swapPartner = k;
       break;
     }
   }
-  return ns;
+  return { state: ns, swapPartner };
 }
 
 export function advanceTurn(state: GameState) {

@@ -18,14 +18,14 @@ import { cn } from '../../lib/utils';
 const SKILL_META: Record<SkillType, { icon: React.ReactNode; label: string; desc: string; color: string }> = {
   TELEPORT:  { icon: <Zap size={16} />,            label: 'Teleport',  desc: 'Ugrás legfeljebb 2 cellára (célpont kijelölése szükséges)',         color: '#a78bfa' },
   HAMMER:    { icon: <Hammer size={16} />,          label: 'Kalapács',  desc: 'Egy fal lerombolása (célpont kijelölése szükséges)',                 color: '#f97316' },
-  SKIP:      { icon: <SkipForward size={16} />,     label: 'Kihagyás',  desc: 'Ellenfél következő körét kihagyja',                                  color: '#38bdf8' },
+  SKIP:      { icon: <SkipForward size={16} />,     label: 'Kihagyás',  desc: 'A következő játékos a körből kimarad (2–4 fő)',                       color: '#38bdf8' },
   MOLE:      { icon: <Pickaxe size={16} />,         label: 'Vakond',    desc: 'Következő körben átsétálhatsz falakon',                              color: '#a3e635' },
   DYNAMITE:  { icon: <Flame size={16} />,           label: 'Dinamit',   desc: 'Egy metszésponthoz csatlakozó összes falat felrobbantja (célpont)', color: '#ef4444' },
   SHIELD:    { icon: <Shield size={16} />,          label: 'Pajzs',     desc: '2 körre blokkolja a vízszintes falakat előtted',                    color: '#22d3ee' },
   WALLS:     { icon: <Plus size={16} />,            label: '+2 Fal',    desc: 'Azonnal kapsz 2 extra falat',                                        color: '#f0c866' },
-  MAGNET:    { icon: <Magnet size={16} />,          label: 'Mágnes',    desc: 'Ellenfelet 2 cellával közelebb húzza feléd',                        color: '#f472b6' },
+  MAGNET:    { icon: <Magnet size={16} />,          label: 'Mágnes',    desc: 'Minden ellenfelet feléd húz (vízsz. vagy függ. tengely, max. 2 mező)', color: '#f472b6' },
   TRAP:      { icon: <Crosshair size={16} />,       label: 'Csapda',    desc: 'Csapdát helyez el az aktuális cellán — ellenfelet visszadobja',     color: '#fb923c' },
-  SWAP:      { icon: <ArrowLeftRight size={16} />,  label: 'Csere',     desc: 'Felcseréli a saját és az ellenfél pozícióját',                      color: '#34d399' },
+  SWAP:      { icon: <ArrowLeftRight size={16} />,  label: 'Csere',     desc: 'Véletlen másik játékossal cserélsz helyet',                          color: '#34d399' },
 };
 
 // ── Skill button with tooltip ────────────────────────────────────────────────

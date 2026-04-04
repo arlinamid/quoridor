@@ -147,10 +147,9 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
           let isTeleportTarget = false;
           if (targetingSkill === 'TELEPORT') {
             const p = state.players[state.turn];
-            const o = state.players[1 - state.turn];
             const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
-            const isEmpty = !(r === o.r && c === o.c);
-            if (dist <= 2 && dist > 0 && isEmpty) isTeleportTarget = true;
+            const noPawnHere = !state.players.some((pl, idx) => idx !== state.turn && pl.r === r && pl.c === c);
+            if (dist <= 2 && dist > 0 && noPawnHere) isTeleportTarget = true;
           }
 
           const hasTreasure = state.treasureMode && state.treasures?.some(t => t.r === r && t.c === c);

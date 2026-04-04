@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasWon, initState, v2w, isBlocked, type GameState } from './logic';
+import { hasWon, initState, v2w, isBlocked, applySkill, type GameState } from './logic';
 
 describe('hasWon', () => {
   it('detects goal row', () => {
@@ -55,5 +55,71 @@ describe('isBlocked', () => {
     };
     expect(isBlocked(s, 3, 4, 4, 4)).toBe(true);
     expect(isBlocked(s, 3, 4, 3, 5)).toBe(false);
+  });
+});
+
+describe('applySkill — multi-player targeting', () => {
+  it('SKIP applies to next player in turn order (4 players)', () => {
+    const s = initState(false, 4);
+    s.turn = 2;
+    s.players[2].inventory = ['SKIP'];
+    const { state } = applySkill(s, 'SKIP');
+    expect(state.players[3].effects?.some(e => e.type === 'SKIP')).toBe(true);
+    expect(state.players[0].effects?.some(e => e.type === 'SKIP')).toBe(false);
+    expect(state.players[1].effects?.some(e => e.type === 'SKIP')).toBe(false);
+  });
+
+  it('SKIP applies to P1 when P0 uses it (2 players)', () => {
+    const s = initState(false, 2);
+    s.turn = 0;
+    s.players[0].inventory = ['SKIP'];
+    const { state } = applySkill(s, 'SKIP');
+    expect(state.players[1].effects?.some(e => e.type === 'SKIP')).toBe(true);
+  });
+
+  it('SWAP exchanges with a randomly chosen other player (seeded rng)', () => {
+    const s = initState(false, 3);
+    s.turn = 0;
+    s.players[0].inventory = ['SWAP'];
+    s.players[0].r = 1;
+    s.players[0].c = 4;
+    s.players[1].r = 2;
+    s.players[1].c = 4;
+    s.players[2].r = 3;
+    s.players[2].c = 4;
+    const { state, swapPartner } = applySkill(s, 'SWAP', undefined, () => 0.1);
+    expect(swapPartner).toBe(1);
+    expect(state.players[0].r).toBe(2);
+    expect(state.players[1].r).toBe(1);
+  });
+
+  it('MAGNET pulls every opponent toward the actor on dominant axis', () => {
+    const s = initState(false, 3);
+    s.turn = 0;
+    s.players[0].inventory = ['MAGNET'];
+    s.players[0].r = 0;
+    s.players[0].c = 4;
+    s.players[1].r = 8;
+    s.players[1].c = 4;
+    s.players[2].r = 4;
+    s.players[2].c = 0;
+    const { state } = applySkill(s, 'MAGNET');
+    expect(state.players[1].r).toBe(6);
+    expect(state.players[2].c).toBe(2);
+  });
+
+  it('MAGNET does not move onto an occupied cell', () => {
+    const s = initState(false, 3);
+    s.turn = 0;
+    s.players[0].inventory = ['MAGNET'];
+    s.players[0].r = 4;
+    s.players[0].c = 4;
+    s.players[1].r = 6;
+    s.players[1].c = 4;
+    s.players[2].r = 5;
+    s.players[2].c = 4;
+    const { state } = applySkill(s, 'MAGNET');
+    expect(state.players[1].r).toBe(6);
+    expect(state.players[2].r).toBe(5);
   });
 });
