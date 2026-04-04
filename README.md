@@ -316,11 +316,13 @@ Játék indul → loadout skilljeivel kezd a P0 / saját slot (online)
 
 ### Easter egg ritkasági szintek
 
+Spawn: játék között **legalább ~28 s** telik el két **dobási kísérlet** között (nem minden kör váltáskor dob). A táblázat **egy kísérletre** vonatkozó valószínűség.
+
 | Tojás | Húsvéti esemény (ápr. 4–8.) | Normál | Érték |
 |-------|--------------------------|--------|-------|
-| 🥚 Alap (EGG_BASIC) | 4% / kör | 0.3% | Közönséges skillekhez |
-| 🌟 Arany (EGG_GOLD) | 1.5% / kör | 0.15% | Ritka skillekhez |
-| 🌈 Szivárvány (EGG_RAINBOW) | 0.5% / kör | 0.05% | Legendás skillekhez |
+| 🥚 Alap (EGG_BASIC) | ~3.3% / kísérlet | 0.3% | Közönséges skillekhez |
+| 🌟 Arany (EGG_GOLD) | ~0.9% / kísérlet | 0.15% | Ritka skillekhez |
+| 🌈 Szivárvány (EGG_RAINBOW) | ~0.3% / kísérlet | 0.05% | Legendás skillekhez |
 
 ### Skill árak
 

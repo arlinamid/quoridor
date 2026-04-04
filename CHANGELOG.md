@@ -4,6 +4,19 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ---
 
+## [Unreleased] — 2026-04-04 (patch 3)
+
+### Changed
+- **Easter egg spawn** — legalább **28 s** valós idő két spawn-kísérlet között (`MIN_MS_BETWEEN_SPAWN_ATTEMPTS` a `useEasterEggSpawner`-ben); korábban minden kör váltáskor dobott, gyors játékban túl sűrűn jelent meg tojás. Kilépés a játékból nullázza a számlálót.
+- **Húsvéti esemény dobás** (~ápr. 4–8.) — valószínűségek mérsékelve (össz. ~**4,5%** / sikeres kísérlet a korábbi ~6% körül helyett): szivárvány ~0,3%, arany ~0,9%, alap ~3,3%.
+
+### Fixed
+- **Vendég (anonim) bejelentkezés** — `try/catch/finally`, külön `guestSigningIn` / `guestAuthError` állapot; hiba az `AuthView`-ban jelenik meg, nem `alert` + globális `authLoading`. `formatGuestAuthError()` magyar szöveg (pl. Supabase „Database error creating anonymous user” / 500).
+- **Supabase migrációk** — fájlnevek egyedi időbélyegre (`20260404120010` … `20260404120060`), hogy a `schema_migrations` ne írjon ütköző `20260404` verziót; `migration repair` + `db push` a távoli DB-re.
+- **`handle_new_user` trigger** — ha a felhasználónév-ütközés ciklusa nem oldódik, **`Játékos_` + UUID (kötőjel nélkül)** garantált egyedi név; csökkenti az anonim signup 500-as auth hibát.
+
+---
+
 ## [Unreleased] — 2026-04-04 (patch 2)
 
 ### Fixed — Code Review (12 bug)
