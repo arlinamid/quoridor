@@ -289,6 +289,24 @@ export function applySkill(
   return { state: ns, swapPartner };
 }
 
+/** SHIELD / SKIP duration tick at turn start. MOLE (Vakond) is excluded — it expires after the bearer moves or ends turn with wall/dig/other skill. */
+function decayEffectsAtTurnStart(effects: PlayerEffect[] | undefined) {
+  if (!effects?.length) return;
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i];
+    if (e.type === 'MOLE') continue;
+    if (e.duration > 0) e.duration--;
+    if (e.duration <= 0) effects.splice(i, 1);
+  }
+}
+
+/** Call before advanceTurn when the current player used a move, wall, dig, or any skill other than activating MOLE. */
+export function consumeActiveMole(p: Player) {
+  if (!p.effects?.length) return;
+  const i = p.effects.findIndex(e => e.type === 'MOLE' && e.duration > 0);
+  if (i !== -1) p.effects.splice(i, 1);
+}
+
 export function advanceTurn(state: GameState) {
   const n = state.players.length;
   state.turn = (state.turn + 1) % n;
@@ -299,23 +317,16 @@ export function advanceTurn(state: GameState) {
   if (p.effects?.some(e => e.type === 'SKIP')) {
     // Remove the SKIP effect, then decay remaining effects for this player
     p.effects = p.effects.filter(e => e.type !== 'SKIP');
-    p.effects.forEach(e => { if (e.duration > 0) e.duration--; });
-    p.effects = p.effects.filter(e => e.duration > 0);
+    decayEffectsAtTurnStart(p.effects);
     // Advance again to the next player
     state.turn = (state.turn + 1) % n;
     const p2 = state.players[state.turn];
-    if (p2.effects) {
-      p2.effects.forEach(e => { if (e.duration > 0) e.duration--; });
-      p2.effects = p2.effects.filter(e => e.duration > 0);
-    }
+    if (p2.effects) decayEffectsAtTurnStart(p2.effects);
     return;
   }
 
   // Normal duration decay for the upcoming player
-  if (p.effects) {
-    p.effects.forEach(e => { if (e.duration > 0) e.duration--; });
-    p.effects = p.effects.filter(e => e.duration > 0);
-  }
+  if (p.effects) decayEffectsAtTurnStart(p.effects);
 }
 
 export function isValidWall(s: GameState, wr: number, wc: number, o: 'h' | 'v') {
@@ -414,7 +425,9 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
   if (isMax) {
     let best = -Infinity;
     for (const m of mv) {
-      const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c; ns.turn = 1 - pi;
+      const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c;
+      consumeActiveMole(ns.players[pi]);
+      ns.turn = 1 - pi;
       best = Math.max(best, mm(ns, d - 1, false, a, b));
       a = Math.max(a, best); if (b <= a) break;
     }
@@ -422,7 +435,9 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
   } else {
     let best = Infinity;
     for (const m of mv) {
-      const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c; ns.turn = 1 - pi;
+      const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c;
+      consumeActiveMole(ns.players[pi]);
+      ns.turn = 1 - pi;
       best = Math.min(best, mm(ns, d - 1, true, a, b));
       b = Math.min(b, best); if (b <= a) break;
     }
@@ -438,6 +453,7 @@ export function mmRoot(s: GameState, d: number): AIMove {
 
   for (const m of mv) {
     const ns = cloneS(s); ns.players[1].r = m.r; ns.players[1].c = m.c;
+    consumeActiveMole(ns.players[1]);
     if (hasWon(ns.players[1])) return { type: 'move', r: m.r, c: m.c };
     ns.turn = 0;
     const sc = mm(ns, d - 1, false, -Infinity, Infinity);
@@ -447,7 +463,7 @@ export function mmRoot(s: GameState, d: number): AIMove {
   if (s.players[1].walls > 0) {
     for (const w of getWC(s, 1)) {
       if (!isValidWall(s, w.r, w.c, w.orient)) continue;
-      const ns = cloneS(s); ns.walls.push(w); ns.players[1].walls--; ns.turn = 0;
+      const ns = cloneS(s); ns.walls.push(w); ns.players[1].walls--; consumeActiveMole(ns.players[1]); ns.turn = 0;
       const sc = mm(ns, d - 1, false, -Infinity, Infinity);
       if (sc > bs) { bs = sc; ba = { type: 'wall', r: w.r, c: w.c, orient: w.orient }; }
     }
@@ -467,6 +483,7 @@ export function greedyBotMove(s: GameState, pi: number): AIMove {
     const ns = cloneS(s);
     ns.players[pi].r = m.r;
     ns.players[pi].c = m.c;
+    consumeActiveMole(ns.players[pi]);
     const d = bfsDist(ns, pi);
     if (d < bestDist) { bestDist = d; bestMove = { type: 'move', r: m.r, c: m.c }; }
   }
@@ -488,6 +505,7 @@ export function greedyBotMove(s: GameState, pi: number): AIMove {
       if (!isValidWall(s, w.r, w.c, w.orient)) continue;
       const ns = cloneS(s);
       ns.walls.push(w);
+      consumeActiveMole(ns.players[pi]);
       const gain = bfsDist(ns, opp) - baseDist;
       if (gain > bestGain) { bestGain = gain; bestWall = { type: 'wall', r: w.r, c: w.c, orient: w.orient }; }
     }

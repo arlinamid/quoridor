@@ -4,6 +4,31 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ---
 
+## [Unreleased] — 2026-04-04 (patch 6)
+
+### Fixed — Online multiplayer / menü
+- **Meccs vége** — `resetOnlineSessionAfterMatch` törli az `onlineGameId`-t, `hostedGameData`-t, `botSlots`-ot és `rejoinCandidate`-et győzelemkor; az **„Újra”** gomb nem akad el a „Már bent vagy egy online játékban!” üzeneten, és a menü nem mutat tévesen folyamatban lévő meccset.
+- **`ensureGameMarkedFinished`** (`supabase.ts`) — ha a sor még `status = 'playing'`, beállítja `finished` + `winner_id` (bármely résztvevő kliens hívhatja); így a **`getActiveGame`** nem listáz lezártnak vélt aktív játékot, és ritkább a heartbeat / cleanup miatti **„inaktivitás / időtúllépés”** késői üzenet lezárt partik után.
+- **Győzelem overlay „Menü”** — online módban is üríti a lokális online munkamenetet (korábban csak a játék képernyő **Menü** gombja hívott `handleLeaveOnlineGame`-et).
+- **Realtime `abandoned`** — mindig lefut a session reset; a modál csak akkor jelenik meg, ha még nincs győzelem overlay.
+
+### Fixed — MOLE (Vakond)
+- **Időzítés** — a MOLE nem a kör elején csökken (`advanceTurn`), hanem **mozgás / fal / kincsásás / nem-MOLE skill** után a `consumeActiveMole` távolítja el; a következő saját lépésben ténylegesen érvényes a fal átlépés.
+- **AI** (`mm`, `mmRoot`, `greedyBotMove`) — a szimulált lépéseknél is fogy a Vakond, hogy a keresés ne számoljon extra mole-köröket.
+
+### Added — Auth / email rate limit
+- **`formatEmailAuthError`**, **`isEmailRateLimitError`** — érthető magyar szöveg a Supabase email limit hibákhoz.
+- **`useEmailSendCooldown`** — sikeres küldés után rövid visszaszámláló; rate limit esetén hosszabb „büntető” szünet; **AuthView** (magic link) és **LeaderboardView** (fiók email).
+- Tesztek: `formatEmailAuthError.test.ts`.
+
+### Added — Tests
+- **MOLE** (`logic.test.ts`): fal blokkolás MOLE nélkül; MOLE megmarad az ellenfél körén; `consumeActiveMole` eltávolítja az effektet.
+
+### Fixed — Online lobby (indítás)
+- **Kitöltött helyek** — a meccs indulásakor a bábuk száma a ténylegesen foglalt slotok + botok alapján készül (`countFilledOnlineSlots`, `filterBotSlotsForPlayerCount`); `updateGameState` frissíti a **`max_players`** értékét; üres slot nem kap „szellem” bábut (pl. 3 fős lobby, csak 2 ember).
+
+---
+
 ## [Unreleased] — 2026-04-04 (patch 5)
 
 ### Changed — Skillek 2–4 játékosra

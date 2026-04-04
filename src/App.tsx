@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
-import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon } from './game/logic';
+import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
-  createGame, joinGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
+  createGame, joinGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, ensureGameMarkedFinished, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -176,6 +176,14 @@ export default function App() {
     if (game) setRejoinCandidate(game);
   };
 
+  /** Online meccs vége / kilépés: ne maradjon `onlineGameId`, különben az „Újra” és a menü blokkol, és a rejoin szalag tévesen aktív játékot mutat. */
+  const resetOnlineSessionAfterMatch = useCallback(() => {
+    setOnlineGameId(null);
+    setHostedGameData(null);
+    setBotSlots([]);
+    setRejoinCandidate(null);
+  }, []);
+
   const handleGuestLogin = async () => {
     setGuestAuthError('');
     if (!isSupabaseConfigured) { setView('menu'); return; }
@@ -202,6 +210,19 @@ export default function App() {
     setWinnerIdx(winnerIndex);
     setGameState(prev => ({ ...prev, gameOver: true }));
     setWinReason(reason);
+
+    if (isOnlineMode(mode)) {
+      const gid = onlineGameIdRef.current;
+      if (gid && isSupabaseConfigured) {
+        const row = hostedGameDataRef.current;
+        const slots = row ? [row.player1_id, row.player2_id, row.player3_id, row.player4_id] : [];
+        const wuid = winnerIndex >= 0 && winnerIndex < slots.length ? slots[winnerIndex] : null;
+        const winnerUuid = typeof wuid === 'string' ? wuid : null;
+        void ensureGameMarkedFinished(gid, winnerUuid);
+      }
+      resetOnlineSessionAfterMatch();
+    }
+
     setProfile(p => {
       const won = isOnlineMode(mode) ? winnerIndex === onlineRole : winnerIndex === 0;
       let newP = { ...p };
@@ -222,7 +243,7 @@ export default function App() {
       }
       return newP;
     });
-  }, [mode, session, onlineRole]);
+  }, [mode, session, onlineRole, resetOnlineSessionAfterMatch]);
   useEffect(() => { handleWinRef.current = handleWin; }, [handleWin]);
 
   useEffect(() => {
@@ -257,10 +278,13 @@ export default function App() {
           const winSlot = slots.findIndex((uid: string | null) => uid === g.winner_id);
           handleWin(winSlot !== -1 ? winSlot : onlineRole, true);
         }
-        if (g.status === 'abandoned' && !showWinRef.current) {
-          setGameState(prev => ({ ...prev, gameOver: true }));
-          setWinReason('Játék lezárva — inaktivitás miatt.');
-          setShowWin(true);
+        if (g.status === 'abandoned') {
+          resetOnlineSessionAfterMatch();
+          if (!showWinRef.current) {
+            setGameState(prev => ({ ...prev, gameOver: true }));
+            setWinReason('Játék lezárva — inaktivitás miatt.');
+            setShowWin(true);
+          }
         }
       })
       .on('presence', { event: 'join' }, ({ key }) => {
@@ -296,7 +320,7 @@ export default function App() {
       if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
       supabase.removeChannel(channel);
     };
-  }, [mode, onlineGameId, session, onlineRole, handleWin]);
+  }, [mode, onlineGameId, session, onlineRole, handleWin, resetOnlineSessionAfterMatch]);
 
   useEffect(() => {
     if (view !== 'lobby' || !isSupabaseConfigured || !session) return;
@@ -544,7 +568,10 @@ export default function App() {
         setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
       }
       const isWin = hasWon(next.players[prev.turn]);
-      if (!isWin) advanceTurn(next);
+      if (!isWin) {
+        consumeActiveMole(next.players[prev.turn]);
+        advanceTurn(next);
+      }
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
       if (isWin) setTimeout(() => handleWinRef.current(prev.turn), 400);
       return next;
@@ -559,6 +586,7 @@ export default function App() {
       next.lastMoveTime = Date.now();
       next.walls.push({ r, c, orient });
       next.players[prev.turn].walls--;
+      consumeActiveMole(next.players[prev.turn]);
       advanceTurn(next);
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, 'playing');
       return next;
@@ -580,6 +608,7 @@ export default function App() {
         if (p.inventory.length < 2) { p.inventory.push(found); setStatusMsg(`Találtál: ${found}`); }
         else setStatusMsg(`Találtál (${found}), de tele az inventory!`);
       }
+      consumeActiveMole(next.players[prev.turn]);
       advanceTurn(next);
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, 'playing');
       return next;
@@ -606,7 +635,10 @@ export default function App() {
       }
       const winnerIdx = next.players.findIndex((p) => hasWon(p));
       const isWin = winnerIdx !== -1;
-      if (!isWin) advanceTurn(next);
+      if (!isWin) {
+        if (skill !== 'MOLE') consumeActiveMole(next.players[prev.turn]);
+        advanceTurn(next);
+      }
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
       if (isWin) setTimeout(() => handleWinRef.current(winnerIdx), 400);
       return next;
@@ -821,7 +853,16 @@ export default function App() {
                 </p>
                 <div className="flex flex-col gap-3">
                   <button onClick={() => startGame(mode)} className="bg-[#f0c866] text-[#1a0f08] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f4d488] transition-colors">Újra</button>
-                  <button onClick={() => { setShowWin(false); setView('menu'); }} className="bg-transparent border border-[#f0c866]/30 text-[#f0c866] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f0c866]/10 transition-colors">Menü</button>
+                  <button
+                    onClick={() => {
+                      setShowWin(false);
+                      if (isOnlineMode(mode)) resetOnlineSessionAfterMatch();
+                      setView('menu');
+                    }}
+                    className="bg-transparent border border-[#f0c866]/30 text-[#f0c866] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f0c866]/10 transition-colors"
+                  >
+                    Menü
+                  </button>
                 </div>
               </motion.div>
             </motion.div>

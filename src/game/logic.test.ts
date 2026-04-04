@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasWon, initState, v2w, isBlocked, applySkill, type GameState } from './logic';
+import { hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole, type GameState } from './logic';
 
 describe('hasWon', () => {
   it('detects goal row', () => {
@@ -121,5 +121,38 @@ describe('applySkill — multi-player targeting', () => {
     const { state } = applySkill(s, 'MAGNET');
     expect(state.players[1].r).toBe(6);
     expect(state.players[2].r).toBe(5);
+  });
+});
+
+describe('MOLE (Vakond)', () => {
+  it('vertical wall blocks right step without MOLE', () => {
+    const s = initState(false, 2);
+    s.walls = [{ r: 0, c: 4, orient: 'v' }];
+    const moves = getValidMoves(s, 0);
+    expect(moves.some(m => m.r === 0 && m.c === 5)).toBe(false);
+  });
+
+  it('keeps MOLE through opponent turn; turn-start decay does not strip MOLE before moving', () => {
+    const s = initState(false, 2);
+    s.players[0].inventory = ['MOLE'];
+    const { state } = applySkill(s, 'MOLE');
+    expect(state.players[0].effects?.some(e => e.type === 'MOLE' && e.duration > 0)).toBe(true);
+    advanceTurn(state);
+    expect(state.turn).toBe(1);
+    expect(state.players[0].effects?.some(e => e.type === 'MOLE')).toBe(true);
+    advanceTurn(state);
+    expect(state.turn).toBe(0);
+    expect(state.players[0].effects?.some(e => e.type === 'MOLE')).toBe(true);
+    const s2 = state;
+    s2.walls = [{ r: 0, c: 4, orient: 'v' }];
+    const moves = getValidMoves(s2, 0);
+    expect(moves.some(m => m.r === 0 && m.c === 5)).toBe(true);
+  });
+
+  it('consumeActiveMole removes Vakond after a qualifying action', () => {
+    const s = initState(false, 2);
+    s.players[0].effects = [{ type: 'MOLE', duration: 1 }];
+    consumeActiveMole(s.players[0]);
+    expect(s.players[0].effects?.some(e => e.type === 'MOLE')).toBe(false);
   });
 });

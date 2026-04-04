@@ -79,6 +79,53 @@ export function formatGuestAuthError(err: unknown): string {
   return msg.trim() || 'Ismeretlen hiba a bejelentkezés során.';
 }
 
+function authErrorMessage(err: unknown): string {
+  if (err == null) return '';
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
+    return (err as { message: string }).message;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function authErrorCode(err: unknown): string {
+  if (err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string') {
+    return (err as { code: string }).code;
+  }
+  return '';
+}
+
+/** True when Supabase Auth refused to send email due to rate limits. */
+export function isEmailRateLimitError(err: unknown): boolean {
+  const msg = authErrorMessage(err).toLowerCase();
+  const code = authErrorCode(err).toLowerCase();
+  if (code === 'over_email_send_rate_limit' || code === 'too_many_requests') return true;
+  if (
+    msg.includes('rate limit') ||
+    msg.includes('email rate limit') ||
+    msg.includes('over_email_send_rate_limit') ||
+    msg.includes('too many requests')
+  ) {
+    return true;
+  }
+  if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 429) return true;
+  return false;
+}
+
+/** Hungarian message for magic link / email megerősítés hibák (rate limit, stb.). */
+export function formatEmailAuthError(err: unknown): string {
+  if (err == null) return 'Ismeretlen hiba az email küldésekor.';
+  if (isEmailRateLimitError(err)) {
+    return 'Túl sok megerősítő / belépési emailt kértél rövid időn belül — a Supabase korlátozza a küldést. Várj legalább 30–60 percet, nézd meg a spam mappát, és ne küldesd újra gyorsan többször. Fizetős csomagban vagy egyedi SMTP-val magasabb a limit.';
+  }
+  const msg = authErrorMessage(err).trim();
+  const lower = msg.toLowerCase();
+  if (lower.includes('invalid') && lower.includes('email')) {
+    return 'Érvénytelen email-cím. Ellenőrizd a formátumot.';
+  }
+  return msg || 'Ismeretlen hiba az email küldésekor.';
+}
+
 /** Send a magic-link email. Works for both new and returning registered users. */
 export const signInWithMagicLink = async (email: string) => {
   if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };
@@ -201,6 +248,16 @@ export const updateGameState = async (
   if (winnerId) payload.winner_id = winnerId;
   if (patch?.max_players !== undefined) payload.max_players = patch.max_players;
   await supabase.from('games').update(payload).eq('id', gameId);
+};
+
+/** Ha a sor még `playing`, beállítja `finished` + winner — így a getActiveGame nem ad vissza „folyó” meccset, ha egy kliens nem küldte el a teljes state frissítést. */
+export const ensureGameMarkedFinished = async (gameId: string, winnerUserId?: string | null) => {
+  if (!isSupabaseConfigured) return;
+  await supabase
+    .from('games')
+    .update({ status: 'finished', winner_id: winnerUserId ?? null })
+    .eq('id', gameId)
+    .eq('status', 'playing');
 };
 
 // ── Egg wallet + owned skills helpers ───────────────────────────────────────

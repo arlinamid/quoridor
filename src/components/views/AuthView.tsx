@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Mail, Send, CheckCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { formatEmailAuthError, isEmailRateLimitError } from '../../lib/supabase';
+import { useEmailSendCooldown } from '../../lib/useEmailSendCooldown';
 
 interface AuthViewProps {
   usernameInput: string;
@@ -26,18 +28,29 @@ export function AuthView({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const { remaining: emailCooldownRemaining, startCooldown: startEmailCooldown, penalizeRateLimit: penalizeEmailRateLimit, blockMessage: emailCooldownBlock } =
+    useEmailSendCooldown(60);
 
   const handleMagicLink = async () => {
     if (!email.trim() || !email.includes('@')) {
       setEmailError('Adj meg egy érvényes email-címet.');
       return;
     }
+    if (emailCooldownBlock) {
+      setEmailError(emailCooldownBlock);
+      return;
+    }
     setEmailError('');
     setSending(true);
     const { error } = await onMagicLink(email.trim());
     setSending(false);
-    if (error) setEmailError(error.message ?? 'Hiba a küldés során.');
-    else setSent(true);
+    if (error) {
+      setEmailError(formatEmailAuthError(error));
+      if (isEmailRateLimitError(error)) penalizeEmailRateLimit();
+    } else {
+      setSent(true);
+      startEmailCooldown();
+    }
   };
 
   return (
@@ -148,7 +161,7 @@ export function AuthView({
                   </div>
                   <button
                     onClick={handleMagicLink}
-                    disabled={sending}
+                    disabled={sending || emailCooldownRemaining > 0}
                     className="w-full bg-[#f0c866] text-[#1a0f08] font-bold py-4 px-6 rounded-lg tracking-wider transition-all hover:bg-[#f4d488] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
                     {sending ? (
@@ -156,10 +169,10 @@ export function AuthView({
                     ) : (
                       <Send size={18} />
                     )}
-                    {sending ? 'Küldés...' : 'Magic Link küldése'}
+                    {sending ? 'Küldés...' : emailCooldownRemaining > 0 ? `Várj (${emailCooldownRemaining}s)` : 'Magic Link küldése'}
                   </button>
                   <p className="text-[10px] text-center text-[#a89078]/60 leading-relaxed">
-                    Emailben kapod a belépési linket — nincs szükség jelszóra. Meglévő és új fiókok esetén egyaránt működik.
+                    Emailben kapod a belépési linket — nincs szükség jelszóra. Meglévő és új fiókok esetén egyaránt működik. A szolgáltató korlátozza, hány levél mehet óránként; ne küldesd újra gyorsan többször.
                   </p>
                 </>
               )}

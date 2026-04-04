@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, User, Mail, Pencil, Check, X, Send, CheckCircle, ShieldCheck, UserX, RefreshCw } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { Profile } from '../../lib/supabase';
+import { supabase, Profile, formatEmailAuthError, isEmailRateLimitError } from '../../lib/supabase';
+import { useEmailSendCooldown } from '../../lib/useEmailSendCooldown';
 import { cn } from '../../lib/utils';
 
 interface LeaderboardViewProps {
@@ -52,18 +52,29 @@ export function LeaderboardView({
   const [upgradeSent, setUpgradeSent] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState('');
+  const { remaining: upgradeCooldownRemaining, startCooldown: startUpgradeCooldown, penalizeRateLimit: penalizeUpgradeRateLimit, blockMessage: upgradeCooldownBlock } =
+    useEmailSendCooldown(60);
 
   const handleUpgrade = async () => {
     if (!upgradeEmail.trim() || !upgradeEmail.includes('@')) {
       setUpgradeError('Adj meg egy érvényes email-címet.');
       return;
     }
+    if (upgradeCooldownBlock) {
+      setUpgradeError(upgradeCooldownBlock);
+      return;
+    }
     setUpgradeError('');
     setUpgradeSending(true);
     const { error } = await onUpgradeAccount(upgradeEmail.trim());
     setUpgradeSending(false);
-    if (error) setUpgradeError(error.message ?? 'Hiba a küldés során.');
-    else setUpgradeSent(true);
+    if (error) {
+      setUpgradeError(formatEmailAuthError(error));
+      if (isEmailRateLimitError(error)) penalizeUpgradeRateLimit();
+    } else {
+      setUpgradeSent(true);
+      startUpgradeCooldown();
+    }
   };
 
   return (
@@ -260,13 +271,13 @@ export function LeaderboardView({
                         />
                         <button
                           onClick={handleUpgrade}
-                          disabled={upgradeSending}
+                          disabled={upgradeSending || upgradeCooldownRemaining > 0}
                           className="bg-amber-500 text-[#1a0f08] font-bold px-3 py-2 rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-sm whitespace-nowrap"
                         >
                           {upgradeSending
                             ? <span className="animate-spin w-4 h-4 border-2 border-[#1a0f08] border-t-transparent rounded-full" />
                             : <Send size={14} />}
-                          Küldés
+                          {upgradeSending ? '…' : upgradeCooldownRemaining > 0 ? `${upgradeCooldownRemaining}s` : 'Küldés'}
                         </button>
                       </div>
                       {upgradeError && <p className="text-xs text-red-400">{upgradeError}</p>}
