@@ -19,6 +19,7 @@ interface LobbyViewProps {
   sessionUserId: string | undefined;
   hostedGameData: any | null;   // full game row when hosting
   botSlots: number[];
+  slotNames: Record<number, string>;
   onToggleBot: (slotIdx: number) => void;
   onBack: () => void;
   onCreateGame: () => void;
@@ -49,7 +50,7 @@ function fmt(ms: number) {
 export function LobbyView({
   mode, onlineGameId, onlineRole, maxPlayers, onMaxPlayersChange,
   waitingGames, lobbyUsers, sessionUserId,
-  hostedGameData, botSlots, onToggleBot,
+  hostedGameData, botSlots, slotNames, onToggleBot,
   onBack, onCreateGame, onStartGame, onJoinGame,
 }: LobbyViewProps) {
   const AUTO_START_MS = 2 * 60 * 1000;
@@ -73,12 +74,16 @@ export function LobbyView({
   const SlotRow = ({ slotIdx, playerId, label }: { slotIdx: number; playerId?: string; label: string }) => {
     const isBot = botSlots.includes(slotIdx);
     const isEmpty = !playerId && !isBot;
+    const displayName = slotNames[slotIdx];
     return (
       <div className="flex items-center gap-3 bg-[#241810] p-3 rounded-lg border border-white/5">
         <div className="w-3 h-3 rounded-full" style={{ background: PLAYER_COLORS[slotIdx] }} />
         <span className="text-xs text-[#a89078] uppercase tracking-wider w-8">{label}</span>
         {playerId ? (
-          <span className="text-sm font-bold text-[#f5e6d3] flex-1">● Csatlakozott</span>
+          <span className="text-sm font-bold flex-1 flex items-center gap-1.5" style={{ color: PLAYER_COLORS[slotIdx] }}>
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: PLAYER_COLORS[slotIdx] }} />
+            {displayName ?? '...'}
+          </span>
         ) : isBot ? (
           <span className="text-sm font-bold text-[#8e44ad] flex-1 flex items-center gap-1"><Bot size={14} /> Bot</span>
         ) : (

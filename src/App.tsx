@@ -46,6 +46,7 @@ export default function App() {
   const [rejoinCandidate, setRejoinCandidate] = useState<any | null>(null);
   const [waitingGames, setWaitingGames] = useState<any[]>([]);
   const [playerProfiles, setPlayerProfiles] = useState<Record<number, Profile>>({});
+  const [lobbySlotNames, setLobbySlotNames] = useState<Record<number, string>>({});
   const [lobbyUsers, setLobbyUsers] = useState<Set<string>>(new Set());
 
   const [leaderboardTab, setLeaderboardTab] = useState<'personal' | 'online'>('personal');
@@ -119,6 +120,25 @@ export default function App() {
     }));
     setPlayerProfiles(map);
   };
+
+  // Fetch usernames for all filled human slots → shown in lobby slot rows
+  useEffect(() => {
+    if (!hostedGameData || !session) return;
+    const ids: (string | null)[] = [
+      hostedGameData.player1_id, hostedGameData.player2_id,
+      hostedGameData.player3_id, hostedGameData.player4_id,
+    ];
+    const map: Record<number, string> = {};
+    Promise.all(ids.map(async (uid, idx) => {
+      if (!uid) return;
+      if (uid === session.user.id) {
+        map[idx] = profile.username;
+        return;
+      }
+      const p = await getDbProfile(uid);
+      if (p) map[idx] = p.username;
+    })).then(() => setLobbySlotNames(map));
+  }, [hostedGameData, session, profile.username]);
 
   const checkActiveGame = async (userId: string) => {
     const game = await getActiveGame(userId);
@@ -612,7 +632,7 @@ export default function App() {
             <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} />
           )}
           {view === 'lobby' && (
-            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
+            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={setMaxPlayers} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
             <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} />
