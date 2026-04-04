@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
 import {
-  GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole,
+  GameState, initState, mmRoot, evHard, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, trapAffectsVictim, type OnlineTeamLayoutId,
 } from './game/logic';
 import {
@@ -461,13 +461,23 @@ export default function App() {
   useEffect(() => {
     if (view !== 'game' || !isAIMode(mode) || gameState.turn !== 1 || gameState.gameOver || animating) return;
     setStatusMsg('A gép gondolkodik...');
-    const depth = aiDifficulty === 'easy' ? 1 : aiDifficulty === 'medium' ? 2 : 3;
+    const hard = aiDifficulty === 'hard';
+    const medium = aiDifficulty === 'medium';
+    const depth =
+      aiDifficulty === 'easy' ? 2 :
+      aiDifficulty === 'medium' ? 4 :
+      5;
+    const thinkMs = hard ? 750 : medium ? 650 : 500;
     const timer = setTimeout(() => {
-      const move = mmRoot(gameState, depth);
+      const move = hard
+        ? mmRoot(gameState, depth, { evalFn: evHard, maxWallCandidates: 44 })
+        : medium
+          ? mmRoot(gameState, depth, { evalFn: evHard, maxWallCandidates: 52 })
+          : mmRoot(gameState, depth);
       setStatusMsg('');
       if (move.type === 'move') executeMove(move.r, move.c);
       else executeWall(move.r, move.c, move.orient);
-    }, 500);
+    }, thinkMs);
     return () => clearTimeout(timer);
   }, [view, mode, gameState, animating, aiDifficulty]);
 

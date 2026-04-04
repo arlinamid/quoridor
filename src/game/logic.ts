@@ -480,13 +480,80 @@ export function ev(s: GameState) {
   return (bfsDist(s, 0) - bfsDist(s, 1)) * 10 + (s.players[1].walls - s.players[0].walls) * 2 + (4 - Math.abs(s.players[1].c - 4));
 }
 
-export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number): number {
+/** Nehéz AI: stabil távolság (Infinity → clamp), mobilitás, sürgősség ha valaki a cél közelében van. */
+export function evHard(s: GameState): number {
+  const FAR = 26;
+  const d0 = bfsDist(s, 0);
+  const d1 = bfsDist(s, 1);
+  const u0 = d0 === Infinity ? FAR : Math.min(d0, FAR);
+  const u1 = d1 === Infinity ? FAR : Math.min(d1, FAR);
+  let score = (u0 - u1) * 14;
+  score += (s.players[1].walls - s.players[0].walls) * 4;
+  score += (4 - Math.abs(s.players[1].c - 4)) * 2;
+  if (s.players.length === 2) {
+    const m0 = getValidMoves(s, 0).length;
+    const m1 = getValidMoves(s, 1).length;
+    score += (m1 - m0) * 3;
+  }
+  if (u0 <= 4) score += (5 - u0) * 7;
+  if (u1 <= 4) score -= (5 - u1) * 7;
+  return score;
+}
+
+type EvalFn = (state: GameState) => number;
+
+/** Erősebb lépések előre — jobb alpha-beta vágás. */
+function orderedPawnMoves(s: GameState, pi: number): { r: number; c: number }[] {
+  const mv = getValidMoves(s, pi);
+  if (mv.length <= 1) return mv;
+  return [...mv].sort((a, b) => {
+    const na = cloneS(s);
+    na.players[pi].r = a.r;
+    na.players[pi].c = a.c;
+    consumeActiveMole(na.players[pi]);
+    const nb = cloneS(s);
+    nb.players[pi].r = b.r;
+    nb.players[pi].c = b.c;
+    consumeActiveMole(nb.players[pi]);
+    return bfsDist(na, pi) - bfsDist(nb, pi);
+  });
+}
+
+/** Gyökérszint: ellenfél útvonal-növekedés szerint csökkenő (legjobb blokkok előre). */
+function orderedRootWalls(s: GameState, ai: number, maxCandidates: number | undefined): Wall[] {
+  const opp = 1 - ai;
+  const baseOpp = bfsDist(s, opp);
+  const wc = getWC(s, ai);
+  const ranked: { w: Wall; gain: number }[] = [];
+  for (const w of wc) {
+    if (!isValidWall(s, w.r, w.c, w.orient)) continue;
+    const ns = cloneS(s);
+    ns.walls.push({ ...w });
+    ns.players[ai].walls--;
+    consumeActiveMole(ns.players[ai]);
+    const after = bfsDist(ns, opp);
+    const gain = after === Infinity ? 80 : after - baseOpp;
+    ranked.push({ w, gain });
+  }
+  ranked.sort((a, b) => b.gain - a.gain);
+  const list = ranked.map(x => x.w);
+  return maxCandidates !== undefined ? list.slice(0, maxCandidates) : list;
+}
+
+export function mm(
+  s: GameState,
+  d: number,
+  isMax: boolean,
+  a: number,
+  b: number,
+  evalFn: EvalFn = ev
+): number {
   if (hasWon(s.players[1])) return 1000;
   if (hasWon(s.players[0])) return -1000;
-  if (d === 0) return ev(s);
+  if (d === 0) return evalFn(s);
 
   const pi = isMax ? 1 : 0;
-  const mv = getValidMoves(s, pi);
+  const mv = orderedPawnMoves(s, pi);
 
   if (isMax) {
     let best = -Infinity;
@@ -494,7 +561,7 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
       const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c;
       consumeActiveMole(ns.players[pi]);
       ns.turn = 1 - pi;
-      best = Math.max(best, mm(ns, d - 1, false, a, b));
+      best = Math.max(best, mm(ns, d - 1, false, a, b, evalFn));
       a = Math.max(a, best); if (b <= a) break;
     }
     return best;
@@ -504,7 +571,7 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
       const ns = cloneS(s); ns.players[pi].r = m.r; ns.players[pi].c = m.c;
       consumeActiveMole(ns.players[pi]);
       ns.turn = 1 - pi;
-      best = Math.min(best, mm(ns, d - 1, true, a, b));
+      best = Math.min(best, mm(ns, d - 1, true, a, b, evalFn));
       b = Math.min(b, best); if (b <= a) break;
     }
     return best;
@@ -513,24 +580,34 @@ export function mm(s: GameState, d: number, isMax: boolean, a: number, b: number
 
 export type AIMove = { type: 'move', r: number, c: number } | { type: 'wall', r: number, c: number, orient: 'h' | 'v' };
 
-export function mmRoot(s: GameState, d: number): AIMove {
+export type MMRootOptions = {
+  /** Alapértelmezett: `ev`. Nehéz módhoz: `evHard`. */
+  evalFn?: EvalFn;
+  /** Ha megadod, csak a legjobb N fal jelölt kerül kiértékelésre (gyorsabb mély keresés). */
+  maxWallCandidates?: number;
+};
+
+export function mmRoot(s: GameState, d: number, opts?: MMRootOptions): AIMove {
+  const evalFn = opts?.evalFn ?? ev;
+  const maxWalls = opts?.maxWallCandidates;
   let bs = -Infinity, ba: AIMove | null = null;
-  const mv = getValidMoves(s, 1);
+  const mv = orderedPawnMoves(s, 1);
 
   for (const m of mv) {
     const ns = cloneS(s); ns.players[1].r = m.r; ns.players[1].c = m.c;
     consumeActiveMole(ns.players[1]);
     if (hasWon(ns.players[1])) return { type: 'move', r: m.r, c: m.c };
     ns.turn = 0;
-    const sc = mm(ns, d - 1, false, -Infinity, Infinity);
+    const sc = mm(ns, d - 1, false, -Infinity, Infinity, evalFn);
     if (sc > bs) { bs = sc; ba = { type: 'move', r: m.r, c: m.c }; }
   }
 
   if (s.players[1].walls > 0) {
-    for (const w of getWC(s, 1)) {
+    const walls = orderedRootWalls(s, 1, maxWalls);
+    for (const w of walls) {
       if (!isValidWall(s, w.r, w.c, w.orient)) continue;
       const ns = cloneS(s); ns.walls.push(w); ns.players[1].walls--; consumeActiveMole(ns.players[1]); ns.turn = 0;
-      const sc = mm(ns, d - 1, false, -Infinity, Infinity);
+      const sc = mm(ns, d - 1, false, -Infinity, Infinity, evalFn);
       if (sc > bs) { bs = sc; ba = { type: 'wall', r: w.r, c: w.c, orient: w.orient }; }
     }
   }

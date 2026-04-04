@@ -13,7 +13,7 @@ Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI b
 |-----|--------|-----|
 | **1 vs 1 — Normal** | Helyi kétjátékos | +20 XP |
 | **1 vs 1 — Kincskereső** | Helyi kétjátékos, kincsekkel és skillekkel | +20 XP |
-| **1 vs Gép — Normal** | AI ellenfél (Könnyű / Közepes / Nehéz) | +50 győzelem / +10 vereség |
+| **1 vs Gép — Normal** | AI: Könnyű (2 mélység), Közepes (4 + erős heurisztika, fal-szűrés), Nehéz (5 + szűkebb fal-szűrés) | +50 győzelem / +10 vereség |
 | **1 vs Gép — Kincskereső** | AI + treasure mode | +50 / +10 |
 | **Online — Normal** | Valós idejű 2–4 játékos multiplayer | +50 / +10 |
 | **Online — Kincskereső** | Online + treasure mode | +50 / +10 |

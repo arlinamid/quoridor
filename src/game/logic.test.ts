@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, cloneS, isValidTrapPlacement, trapAffectsVictim, viewerSeesTrapMarker,
+  evHard, mmRoot,
   type GameState,
 } from './logic';
 
@@ -158,6 +159,24 @@ describe('MOLE (Vakond)', () => {
     s.players[0].effects = [{ type: 'MOLE', duration: 1 }];
     consumeActiveMole(s.players[0]);
     expect(s.players[0].effects?.some(e => e.type === 'MOLE')).toBe(false);
+  });
+});
+
+describe('AI (minimax hardening)', () => {
+  it('evHard is always finite (clamps Infinity BFS)', () => {
+    const s = initState(false, 2);
+    expect(Number.isFinite(evHard(s))).toBe(true);
+  });
+
+  it('mmRoot with evHard and maxWallCandidates returns a move or wall', () => {
+    const s = initState(false, 2);
+    s.turn = 1;
+    const m = mmRoot(s, 2, { evalFn: evHard, maxWallCandidates: 16 });
+    expect(['move', 'wall']).toContain(m.type);
+    if (m.type === 'move') {
+      expect(m.r).toBeGreaterThanOrEqual(0);
+      expect(m.c).toBeGreaterThanOrEqual(0);
+    }
   });
 });
 
