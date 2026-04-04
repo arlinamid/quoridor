@@ -411,11 +411,19 @@ export const saveSkillLoadout = async (userId: string | null, loadout: import('.
 
 // --- Server-side XP (Edge Function) ---
 // Falls back to null on error; App.tsx falls back to direct DB update in that case.
-export const awardXp = async (session: { access_token: string }, mode: string, won: boolean): Promise<Partial<Profile> | null> => {
+// Ne adj meg explicit Authorization headert: a supabase kliens fetchWithAuth a auth.getSession()
+// alapján tölti ki — a React state-ből jövő access_token lehet lejárt, miközben a storage-ban már frissült.
+export const awardXp = async (mode: string, won: boolean): Promise<Partial<Profile> | null> => {
   if (!isSupabaseConfigured) return null;
+  let { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return null;
+  const expMs = typeof session.expires_at === 'number' ? session.expires_at * 1000 : 0;
+  if (expMs > 0 && expMs < Date.now() + 60_000) {
+    const { data: ref } = await supabase.auth.refreshSession();
+    if (ref.session?.access_token) session = ref.session;
+  }
   const { data, error } = await supabase.functions.invoke('award-xp', {
     body: { mode, won },
-    headers: { Authorization: `Bearer ${session.access_token}` },
   });
   if (error) {
     console.error('award-xp Edge Function hiba:', error);

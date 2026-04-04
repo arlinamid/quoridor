@@ -300,7 +300,7 @@ export default function App() {
         newP = { ...p, xp: p.xp + 20, level: calculateLevel(p.xp + 20) };
       }
       if (isSupabaseConfigured && session?.user?.id) {
-        awardXp(session, mode, isOnlineMode(mode) ? won : winnerIndex === 0).then(result => {
+        awardXp(mode, isOnlineMode(mode) ? won : winnerIndex === 0).then(result => {
           if (result) setProfile(prev => ({ ...prev, ...result }));
         }).catch(async () => {
           const refreshed = await getDbProfile(session!.user.id, session!.user.id);
