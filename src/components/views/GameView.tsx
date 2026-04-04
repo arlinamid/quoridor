@@ -1,12 +1,113 @@
-import React from 'react';
-import { motion } from 'motion/react';
-import { Bot } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Bot, Zap, Hammer, SkipForward, Pickaxe, Flame,
+  Shield, Plus, Magnet, Crosshair, ArrowLeftRight, Lock,
+} from 'lucide-react';
 import { GameState, SkillType } from '../../game/logic';
 import { Profile } from '../../lib/supabase';
 import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/types';
 import { QuoridorBoard } from '../QuoridorBoard';
 import { PLAYER_COLORS, PLAYER_LABELS } from './LobbyView';
 import { cn } from '../../lib/utils';
+
+// ── Skill meta ──────────────────────────────────────────────────────────────
+
+const SKILL_META: Record<SkillType, { icon: React.ReactNode; label: string; desc: string; color: string }> = {
+  TELEPORT:  { icon: <Zap size={16} />,            label: 'Teleport',  desc: 'Ugrás legfeljebb 2 cellára (célpont kijelölése szükséges)',         color: '#a78bfa' },
+  HAMMER:    { icon: <Hammer size={16} />,          label: 'Kalapács',  desc: 'Egy fal lerombolása (célpont kijelölése szükséges)',                 color: '#f97316' },
+  SKIP:      { icon: <SkipForward size={16} />,     label: 'Kihagyás',  desc: 'Ellenfél következő körét kihagyja',                                  color: '#38bdf8' },
+  MOLE:      { icon: <Pickaxe size={16} />,         label: 'Vakond',    desc: 'Következő körben átsétálhatsz falakon',                              color: '#a3e635' },
+  DYNAMITE:  { icon: <Flame size={16} />,           label: 'Dinamit',   desc: 'Egy metszésponthoz csatlakozó összes falat felrobbantja (célpont)', color: '#ef4444' },
+  SHIELD:    { icon: <Shield size={16} />,          label: 'Pajzs',     desc: '2 körre blokkolja a vízszintes falakat előtted',                    color: '#22d3ee' },
+  WALLS:     { icon: <Plus size={16} />,            label: '+2 Fal',    desc: 'Azonnal kapsz 2 extra falat',                                        color: '#f0c866' },
+  MAGNET:    { icon: <Magnet size={16} />,          label: 'Mágnes',    desc: 'Ellenfelet 2 cellával közelebb húzza feléd',                        color: '#f472b6' },
+  TRAP:      { icon: <Crosshair size={16} />,       label: 'Csapda',    desc: 'Csapdát helyez el az aktuális cellán — ellenfelet visszadobja',     color: '#fb923c' },
+  SWAP:      { icon: <ArrowLeftRight size={16} />,  label: 'Csere',     desc: 'Felcseréli a saját és az ellenfél pozícióját',                      color: '#34d399' },
+};
+
+// ── Skill button with tooltip ────────────────────────────────────────────────
+
+interface SkillButtonProps {
+  skill: SkillType;
+  canAct: boolean;
+  hidden: boolean;
+  active: boolean;
+  onClick: () => void;
+}
+
+function SkillButton({ skill, canAct, hidden, active, onClick }: SkillButtonProps) {
+  const [showTip, setShowTip] = useState(false);
+  const meta = SKILL_META[skill];
+
+  return (
+    <div className="relative" onMouseEnter={() => setShowTip(true)} onMouseLeave={() => setShowTip(false)}>
+      <button
+        onClick={onClick}
+        disabled={!canAct}
+        aria-label={hidden ? 'Ismeretlen skill' : meta.label}
+        className={cn(
+          'flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-xl border-2 transition-all duration-150',
+          'text-[10px] font-bold uppercase tracking-wide leading-none select-none',
+          hidden
+            ? 'border-white/10 bg-[#1a0f08] text-white/20 cursor-default'
+            : active
+              ? 'scale-105 shadow-lg'
+              : canAct
+                ? 'bg-[#241810] hover:brightness-125 hover:scale-105 cursor-pointer'
+                : 'bg-[#1a0f08] opacity-40 cursor-not-allowed',
+        )}
+        style={
+          hidden ? {} :
+          active
+            ? { borderColor: meta.color, background: meta.color + '28', color: meta.color, boxShadow: `0 0 14px ${meta.color}55` }
+            : { borderColor: meta.color + '55', color: meta.color }
+        }
+      >
+        {hidden ? <Lock size={16} className="opacity-40" /> : meta.icon}
+        <span>{hidden ? '???' : meta.label}</span>
+      </button>
+
+      {/* Tooltip */}
+      <AnimatePresence>
+        {showTip && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ duration: 0.12 }}
+            className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+          >
+            <div
+              className="bg-[#0d0704] border rounded-lg px-3 py-2 shadow-2xl text-center whitespace-nowrap"
+              style={{ borderColor: hidden ? '#ffffff22' : meta.color + '66' }}
+            >
+              {!hidden && (
+                <div className="font-bold text-xs mb-0.5" style={{ color: meta.color }}>
+                  {meta.label}
+                </div>
+              )}
+              <div className="text-[11px] text-[#c8b090] max-w-[180px] whitespace-normal leading-snug">
+                {hidden ? 'Az ellenfél skillje — nem látható' : meta.desc}
+              </div>
+              {/* Arrow */}
+              <div
+                className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0"
+                style={{
+                  borderLeft: '5px solid transparent',
+                  borderRight: '5px solid transparent',
+                  borderTop: `5px solid ${hidden ? '#ffffff22' : meta.color + '66'}`,
+                }}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Main GameView ────────────────────────────────────────────────────────────
 
 interface GameViewProps {
   gameState: GameState;
@@ -68,7 +169,7 @@ export function GameView({
       exit={{ opacity: 0, scale: 0.95 }}
       className="flex-1 flex flex-col items-center w-full max-w-2xl p-4"
     >
-      {/* Player cards — dynamic for 2-4 players */}
+      {/* Player cards */}
       <div className="w-full flex items-center gap-2 py-3 flex-wrap justify-center">
         {gameState.players.map((p, pi) => {
           const isActive = gameState.turn === pi;
@@ -121,9 +222,12 @@ export function GameView({
 
       {/* Treasure mode: dig + skills */}
       {isTreasureMode(mode) && (
-        <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-2">
+        <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-3">
           {isLocalTurn &&
-           gameState.treasures?.some(t => t.r === gameState.players[gameState.turn].r && t.c === gameState.players[gameState.turn].c) && (
+           gameState.treasures?.some(t =>
+             t.r === gameState.players[gameState.turn].r &&
+             t.c === gameState.players[gameState.turn].c
+           ) && (
             <button
               onClick={onDig}
               className="bg-[#e8b830] text-[#1a0f0a] font-bold px-6 py-2 rounded-md text-sm hover:bg-[#f0c866] transition-all shadow-[0_0_15px_rgba(232,184,48,0.4)]"
@@ -132,35 +236,40 @@ export function GameView({
             </button>
           )}
 
-          <div className="flex gap-2 flex-wrap justify-center w-full">
-            {gameState.players.map((_, pi) => {
-              const canAct = canActPlayer(pi);
-              const skills = gameState.players[pi].inventory ?? [];
+          {/* Skill rows per player */}
+          <div className="flex flex-col gap-2 w-full">
+            {gameState.players.map((pl, pi) => {
+              const skills = pl.inventory ?? [];
               if (skills.length === 0) return null;
+              const canAct = canActPlayer(pi);
+              const isHidden = isOnlineMode(mode) && pi !== onlineRole;
               return (
-                <div key={pi} className="flex flex-col items-center gap-1">
-                  <div className="text-[10px] text-[#a89078]">{PLAYER_LABELS[pi]}:</div>
-                  <div className="flex gap-1">
+                <div key={pi} className="flex items-center gap-3">
+                  {/* Player label */}
+                  <div
+                    className="text-[10px] font-bold uppercase tracking-wider w-6 text-center shrink-0"
+                    style={{ color: PLAYER_COLORS[pi] }}
+                  >
+                    {PLAYER_LABELS[pi]}
+                  </div>
+                  {/* Skill buttons */}
+                  <div className="flex gap-2">
                     {skills.map((skill, idx) => (
-                      <button
+                      <SkillButton
                         key={idx}
+                        skill={skill}
+                        canAct={canAct}
+                        hidden={isHidden}
+                        active={targetingSkill === skill}
                         onClick={() => {
-                          if (!canAct) return;
+                          if (!canAct || isHidden) return;
                           if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
                             onSetTargetingSkill(targetingSkill === skill ? null : skill);
                           } else {
                             onExecuteSkill(skill);
                           }
                         }}
-                        disabled={!canAct}
-                        className={cn(
-                          "text-xs px-2 py-1 rounded border",
-                          targetingSkill === skill ? "bg-[#e8b830] text-[#1a0f0a] border-[#e8b830]" : "bg-[#241810] text-[#f0c866] border-[#f0c866]/30",
-                          !canAct && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        {isOnlineMode(mode) && pi !== onlineRole ? '???' : skill}
-                      </button>
+                      />
                     ))}
                   </div>
                 </div>
