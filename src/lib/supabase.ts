@@ -189,10 +189,17 @@ export const getActiveGame = async (userId: string) => {
   return data ?? null;
 };
 
-export const updateGameState = async (gameId: string, state: any, status: string = 'playing', winnerId?: string) => {
+export const updateGameState = async (
+  gameId: string,
+  state: any,
+  status: string = 'playing',
+  winnerId?: string,
+  patch?: { max_players?: number }
+) => {
   if (!isSupabaseConfigured) return;
   const payload: any = { state, status };
   if (winnerId) payload.winner_id = winnerId;
+  if (patch?.max_players !== undefined) payload.max_players = patch.max_players;
   await supabase.from('games').update(payload).eq('id', gameId);
 };
 

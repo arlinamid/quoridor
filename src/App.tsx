@@ -5,7 +5,7 @@ import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySk
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
-  createGame, joinGame, startOnlineGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
+  createGame, joinGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -18,6 +18,7 @@ import { saveSkillLoadout, collectEasterEgg, purchaseSkill, getLocalSkillLoadout
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { GameMode, View, isOnlineMode, isTreasureMode, isAIMode } from './lib/types';
+import { countFilledOnlineSlots, filterBotSlotsForPlayerCount } from './lib/onlineLobby';
 import { AuthView } from './components/views/AuthView';
 import { MenuView } from './components/views/MenuView';
 import { LobbyView } from './components/views/LobbyView';
@@ -243,6 +244,7 @@ export default function App() {
               i === myRole ? { ...p, inventory: [...myLoadout].slice(0, 3) } : p
             );
           }
+          if (typeof g.max_players === 'number' && g.max_players >= 2) setMaxPlayers(g.max_players);
           setGameState(gs);
           setView('game');
         } else if (g.status === 'playing' || g.status === 'waiting') {
@@ -317,13 +319,19 @@ export default function App() {
     const AUTO_START_MS = 2 * 60 * 1000;
     const timer = setTimeout(async () => {
       const g = hostedGameDataRef.current;
-      if (!g) return;
-      const humanFilled = [g.player1_id, g.player2_id, g.player3_id, g.player4_id].filter(Boolean).length;
-      const totalFilled = humanFilled + botSlotsRef.current.length; // use ref, not stale closure
-      if (totalFilled >= 2) {
-        const stateWithBots = { ...gameStateRef.current, botPlayers: botSlotsRef.current.length > 0 ? botSlotsRef.current : undefined };
-        await updateGameState(onlineGameIdRef.current!, stateWithBots, 'playing');
-      }
+      if (!g || g.status !== 'waiting') return;
+      const lobbyCap = Math.min(4, Math.max(2, g.max_players ?? 2));
+      const n = countFilledOnlineSlots(g, lobbyCap, botSlotsRef.current);
+      if (n < 2) return;
+      const treasure = Boolean(g.state?.treasureMode);
+      const loadout =
+        skillLoadoutRef.current.length > 0 ? [...skillLoadoutRef.current].slice(0, 3) : undefined;
+      let newState = initState(treasure, n, loadout);
+      const bots = filterBotSlotsForPlayerCount(botSlotsRef.current, n);
+      if (bots.length > 0) newState = { ...newState, botPlayers: bots };
+      setGameState(newState);
+      setMaxPlayers(n);
+      await updateGameState(onlineGameIdRef.current!, newState, 'playing', undefined, { max_players: n });
     }, AUTO_START_MS);
     return () => clearTimeout(timer);
   }, [onlineGameId, onlineRole]);
@@ -640,8 +648,19 @@ export default function App() {
 
   const handleStartOnlineGame = async () => {
     if (!onlineGameId || onlineRole !== 0) return;
-    const stateWithBots = { ...gameState, botPlayers: botSlots.length > 0 ? botSlots : undefined };
-    await updateGameState(onlineGameId, stateWithBots, 'playing');
+    const g = hostedGameData;
+    const lobbyCap = Math.min(4, Math.max(2, g?.max_players ?? maxPlayers));
+    const n = countFilledOnlineSlots(g, lobbyCap, botSlots);
+    if (n < 2) return;
+    const treasure = Boolean(g?.state?.treasureMode ?? mode === 'treasure-online');
+    const loadout =
+      skillLoadoutRef.current.length > 0 ? [...skillLoadoutRef.current].slice(0, 3) : undefined;
+    let newState = initState(treasure, n, loadout);
+    const bots = filterBotSlotsForPlayerCount(botSlots, n);
+    if (bots.length > 0) newState = { ...newState, botPlayers: bots };
+    setGameState(newState);
+    setMaxPlayers(n);
+    await updateGameState(onlineGameId, newState, 'playing', undefined, { max_players: n });
   };
 
   const handleLeaveOnlineGame = useCallback(async () => {
@@ -662,6 +681,7 @@ export default function App() {
     setOnlineGameId(game.id);
     setOnlineRole(myRole);
     setGameState(game.state);
+    setMaxPlayers(game.max_players ?? game.state?.playerCount ?? game.state?.players?.length ?? 2);
     setRejoinCandidate(null);
     await loadPlayerProfiles(game, session.user.id);
     setView('game');

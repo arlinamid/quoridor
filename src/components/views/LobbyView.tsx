@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, User, Map, Play, Users, Bot, X } from 'lucide-react';
 import { GameMode } from '../../lib/types';
 import { Profile } from '../../lib/supabase';
+import { countFilledOnlineSlots } from '../../lib/onlineLobby';
 import { cn } from '../../lib/utils';
 
 export const PLAYER_COLORS = ['#e74c3c', '#2c3e50', '#27ae60', '#8e44ad'] as const;
@@ -57,12 +58,8 @@ export function LobbyView({
   const isHost = onlineRole === 0 && !!onlineGameId;
   const countdown = useCountdown(AUTO_START_MS, isHost);
 
-  // Count filled slots in hosted game (human players + bots)
-  const humanSlots = hostedGameData
-    ? [hostedGameData.player1_id, hostedGameData.player2_id, hostedGameData.player3_id, hostedGameData.player4_id].filter(Boolean).length
-    : 1; // just host
-  const filledSlots = humanSlots + botSlots.length;
-
+  const lobbyCap = Math.min(hostedGameData?.max_players ?? maxPlayers, 4);
+  const filledSlots = hostedGameData ? countFilledOnlineSlots(hostedGameData, lobbyCap, botSlots) : 1;
   const canStart = filledSlots >= 2;
 
   // Filter lobby to same mode
@@ -176,8 +173,13 @@ export function LobbyView({
                 )}
               >
                 <Play size={18} />
-                {canStart ? 'Játék Indítása' : `Legalább 2 játékos szükséges (${filledSlots}/${maxPlayers})`}
+                {canStart ? 'Játék Indítása' : `Legalább 2 játékos szükséges (${filledSlots}/${lobbyCap})`}
               </button>
+            )}
+            {isHost && canStart && filledSlots < lobbyCap && (
+              <p className="text-center text-[10px] text-amber-400/90 leading-relaxed px-1">
+                A meccs csak a kitöltött helyekkel indul ({filledSlots} játékos) — üres slot nem kap bábut a táblán.
+              </p>
             )}
             {!isHost && (
               <div className="text-center py-4 text-[#a89078] text-sm">
