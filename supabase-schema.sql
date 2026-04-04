@@ -66,6 +66,11 @@ begin
     end if;
   end loop;
 
+  -- If still colliding (unlikely), use id-derived name so insert cannot violate unique(username)
+  if exists (select 1 from public.profiles where username = final_username) then
+    final_username := 'Játékos_' || replace(new.id::text, '-', '');
+  end if;
+
   insert into public.profiles (id, username, fingerprint)
   values (
     new.id, 
