@@ -306,7 +306,7 @@ export default function App() {
             setProfile(prev => ({ ...prev, ...result }));
             return;
           }
-          // award-xp 401 / hiba: optimista +50/+10 már lefutott — szinkron a DB-vel (ranglista, XP lock)
+          // RPC hiba: optimista frissítés már lefutott — szinkron a DB-vel (ranglista, XP lock)
           const refreshed = await getDbProfile(uid, uid);
           if (refreshed) setProfile(prev => ({ ...prev, ...refreshed }));
         });

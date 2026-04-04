@@ -409,31 +409,23 @@ export const saveSkillLoadout = async (userId: string | null, loadout: import('.
   await supabase.from('profiles').update({ skill_loadout: loadout }).eq('id', userId);
 };
 
-// --- Server-side XP (Edge Function) ---
-// Falls back to null on error — App.tsx ilyenkor újraolvassa a profilt a DB-ből (RLS miatt kliens nem írhat XP-t).
+// --- Server-side XP (SECURITY DEFINER RPC) ---
+// Ugyanaz a JWT mint a többi PostgREST hívás — nem kell Edge Function (gateway 401 elkerülése).
+// Hiba esetén null — App.tsx getDbProfile-lal szinkronizál.
 export const awardXp = async (mode: string, won: boolean): Promise<Partial<Profile> | null> => {
   if (!isSupabaseConfigured) return null;
 
-  const call = async (accessToken: string) =>
-    supabase.functions.invoke('award-xp', {
-      body: { mode, won },
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-  await supabase.auth.refreshSession().catch(() => {});
-
-  let { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) return null;
-
-  let { data, error } = await call(session.access_token);
+  const { data, error } = await supabase.rpc('award_match_xp', { p_mode: mode, p_won: won });
   if (error) {
-    await supabase.auth.refreshSession().catch(() => {});
-    const { data: { session: s2 } } = await supabase.auth.getSession();
-    if (s2?.access_token) ({ data, error } = await call(s2.access_token));
-  }
-  if (error) {
-    console.error('award-xp Edge Function hiba:', error);
+    console.error('award_match_xp RPC hiba:', error);
     return null;
   }
-  return data as Partial<Profile>;
+  if (!data || typeof data !== 'object') return null;
+  const o = data as Record<string, unknown>;
+  return {
+    xp: Number(o.xp),
+    wins: Number(o.wins),
+    losses: Number(o.losses),
+    level: Number(o.level),
+  };
 };
