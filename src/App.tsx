@@ -4,7 +4,7 @@ import { ThreeBackground } from './components/ThreeBackground';
 import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
-  supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile,
+  supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
   createGame, joinGame, startOnlineGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
@@ -41,6 +41,8 @@ export default function App() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [guestSigningIn, setGuestSigningIn] = useState(false);
+  const [guestAuthError, setGuestAuthError] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
   const [profile, setProfile] = useState<Profile>(getLocalProfile());
 
@@ -174,11 +176,17 @@ export default function App() {
   };
 
   const handleGuestLogin = async () => {
-    setAuthLoading(true);
-    if (!isSupabaseConfigured) { setView('menu'); setAuthLoading(false); return; }
-    const { error } = await signInAnonymously(usernameInput.trim() || undefined, getDeviceFingerprint());
-    if (error) alert('Hiba a bejelentkezés során: ' + error.message);
-    setAuthLoading(false);
+    setGuestAuthError('');
+    if (!isSupabaseConfigured) { setView('menu'); return; }
+    setGuestSigningIn(true);
+    try {
+      const { error } = await signInAnonymously(usernameInput.trim() || undefined, getDeviceFingerprint());
+      if (error) setGuestAuthError(formatGuestAuthError(error));
+    } catch (e) {
+      setGuestAuthError(formatGuestAuthError(e));
+    } finally {
+      setGuestSigningIn(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -731,7 +739,19 @@ export default function App() {
 
         <AnimatePresence mode="wait">
           {view === 'auth' && (
-            <AuthView key="auth" usernameInput={usernameInput} onUsernameChange={setUsernameInput} onGuestLogin={handleGuestLogin} onMagicLink={email => signInWithMagicLink(email)} isSupabaseConfigured={isSupabaseConfigured} onTos={() => setView('tos')} onPrivacy={() => setView('privacy')} />
+            <AuthView
+              key="auth"
+              usernameInput={usernameInput}
+              onUsernameChange={v => { setUsernameInput(v); setGuestAuthError(''); }}
+              onGuestLogin={handleGuestLogin}
+              guestSigningIn={guestSigningIn}
+              guestAuthError={guestAuthError}
+              onMagicLink={email => signInWithMagicLink(email)}
+              isSupabaseConfigured={isSupabaseConfigured}
+              onTos={() => setView('tos')}
+              onPrivacy={() => setView('privacy')}
+              onAuthTabChange={() => setGuestAuthError('')}
+            />
           )}
           {view === 'rules' && (
             <motion.div key="rules" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 w-full max-w-3xl p-6 py-12 flex justify-center">

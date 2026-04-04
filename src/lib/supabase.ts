@@ -53,6 +53,28 @@ export const signInAnonymously = async (username?: string, fingerprint?: string)
   return await supabase.auth.signInAnonymously({ options: Object.keys(options.data).length > 0 ? options : undefined });
 };
 
+/** User-facing Hungarian message for vendég / anon auth failures (network throws, AuthApiError, trigger 500, etc.). */
+export function formatGuestAuthError(err: unknown): string {
+  const msg =
+    err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+      ? (err as { message: string }).message
+      : err instanceof Error
+        ? err.message
+        : String(err);
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('database error creating anonymous user') ||
+    lower.includes('database error') ||
+    lower.includes('internal server error')
+  ) {
+    return 'A szerver nem tudott vendégfiókot létrehozni (adatbázis hiba). Próbáld újra, vagy jelentkezz be az Email fülön magic linkkel. Ha gyakran előfordul, ellenőrizd a Supabase projekt auth/trigger beállításait.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Hálózati hiba — ellenőrizd az internetkapcsolatot, majd próbáld újra.';
+  }
+  return msg.trim() || 'Ismeretlen hiba a bejelentkezés során.';
+}
+
 /** Send a magic-link email. Works for both new and returning registered users. */
 export const signInWithMagicLink = async (email: string) => {
   if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };

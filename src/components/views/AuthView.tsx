@@ -6,16 +6,20 @@ import { cn } from '../../lib/utils';
 interface AuthViewProps {
   usernameInput: string;
   onUsernameChange: (v: string) => void;
-  onGuestLogin: () => void;
+  onGuestLogin: () => void | Promise<void>;
+  guestSigningIn?: boolean;
+  guestAuthError?: string;
   onMagicLink: (email: string) => Promise<{ error: any }>;
   isSupabaseConfigured: boolean;
   onTos: () => void;
   onPrivacy: () => void;
+  /** Called when switching guest/email tab (e.g. clear vendég auth errors). */
+  onAuthTabChange?: () => void;
 }
 
 export function AuthView({
-  usernameInput, onUsernameChange, onGuestLogin, onMagicLink,
-  isSupabaseConfigured, onTos, onPrivacy,
+  usernameInput, onUsernameChange, onGuestLogin, guestSigningIn = false, guestAuthError = '',
+  onMagicLink, isSupabaseConfigured, onTos, onPrivacy, onAuthTabChange,
 }: AuthViewProps) {
   const [tab, setTab] = useState<'guest' | 'email'>('guest');
   const [email, setEmail] = useState('');
@@ -61,7 +65,7 @@ export function AuthView({
             {(['guest', 'email'] as const).map(t => (
               <button
                 key={t}
-                onClick={() => { setTab(t); setSent(false); setEmailError(''); }}
+                onClick={() => { setTab(t); setSent(false); setEmailError(''); onAuthTabChange?.(); }}
                 className={cn(
                   "flex-1 pb-2 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 flex items-center justify-center gap-1.5",
                   tab === t ? "border-[#f0c866] text-[#f0c866]" : "border-transparent text-[#a89078] hover:text-white"
@@ -84,16 +88,27 @@ export function AuthView({
                   placeholder="Pl. SakkMester99"
                   value={usernameInput}
                   onChange={e => onUsernameChange(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && onGuestLogin()}
+                  onKeyDown={e => e.key === 'Enter' && void onGuestLogin()}
                   maxLength={15}
                   className="w-full bg-[#241810] border border-[#f0c866]/30 rounded-lg px-4 py-3 text-[#f5e6d3] focus:outline-none focus:border-[#f0c866] transition-colors"
                 />
               </div>
+              {guestAuthError && (
+                <p className="text-xs text-red-400 leading-relaxed" role="alert">
+                  {guestAuthError}
+                </p>
+              )}
               <button
-                onClick={onGuestLogin}
-                className="w-full bg-[#241810] border border-[#f0c866]/50 text-[#f0c866] font-bold py-4 px-6 rounded-lg tracking-wider transition-all hover:bg-[#f0c866]/10 hover:border-[#f0c866] hover:shadow-[0_0_20px_rgba(240,200,102,0.2)] flex items-center justify-center gap-3"
+                onClick={() => void onGuestLogin()}
+                disabled={guestSigningIn}
+                className="w-full bg-[#241810] border border-[#f0c866]/50 text-[#f0c866] font-bold py-4 px-6 rounded-lg tracking-wider transition-all hover:bg-[#f0c866]/10 hover:border-[#f0c866] hover:shadow-[0_0_20px_rgba(240,200,102,0.2)] flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <User size={20} /> Játssz Vendégként (Anonim)
+                {guestSigningIn ? (
+                  <span className="animate-spin w-5 h-5 border-2 border-[#f0c866] border-t-transparent rounded-full" />
+                ) : (
+                  <User size={20} />
+                )}
+                {guestSigningIn ? 'Belépés…' : 'Játssz Vendégként (Anonim)'}
               </button>
               {isSupabaseConfigured && (
                 <p className="text-[10px] text-center text-[#a89078]/60 leading-relaxed">
