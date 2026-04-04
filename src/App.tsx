@@ -5,7 +5,7 @@ import { GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySk
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, getDbProfile, updateDbProfile,
-  createGame, joinGame, startOnlineGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp,
+  createGame, joinGame, startOnlineGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
 } from './lib/supabase';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
@@ -611,7 +611,7 @@ export default function App() {
 
         <AnimatePresence mode="wait">
           {view === 'auth' && (
-            <AuthView key="auth" usernameInput={usernameInput} onUsernameChange={setUsernameInput} onGuestLogin={handleGuestLogin} isSupabaseConfigured={isSupabaseConfigured} onTos={() => setView('tos')} onPrivacy={() => setView('privacy')} />
+            <AuthView key="auth" usernameInput={usernameInput} onUsernameChange={setUsernameInput} onGuestLogin={handleGuestLogin} onMagicLink={email => signInWithMagicLink(email)} isSupabaseConfigured={isSupabaseConfigured} onTos={() => setView('tos')} onPrivacy={() => setView('privacy')} />
           )}
           {view === 'rules' && (
             <motion.div key="rules" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 w-full max-w-3xl p-6 py-12 flex justify-center">
@@ -638,7 +638,7 @@ export default function App() {
             <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} />
           )}
           {view === 'leaderboard' && (
-            <LeaderboardView key="leaderboard" profile={profile} leaderboardData={leaderboardData} tab={leaderboardTab} onTabChange={setLeaderboardTab} onBack={() => setView('menu')} isSupabaseConfigured={isSupabaseConfigured} />
+            <LeaderboardView key="leaderboard" profile={profile} leaderboardData={leaderboardData} tab={leaderboardTab} onTabChange={setLeaderboardTab} onBack={() => setView('menu')} isSupabaseConfigured={isSupabaseConfigured} isAnonymous={session?.user?.is_anonymous ?? true} userEmail={session?.user?.email} onUsernameUpdate={async (username) => { await updateDbProfile(session!.user.id, { username }); setProfile(p => ({ ...p, username })); }} onUpgradeAccount={email => upgradeAnonymousAccount(email)} />
           )}
         </AnimatePresence>
 

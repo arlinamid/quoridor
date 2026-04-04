@@ -47,6 +47,22 @@ export const signInAnonymously = async (username?: string, fingerprint?: string)
   return await supabase.auth.signInAnonymously({ options: Object.keys(options.data).length > 0 ? options : undefined });
 };
 
+/** Send a magic-link email. Works for both new and returning registered users. */
+export const signInWithMagicLink = async (email: string) => {
+  if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };
+  return supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  });
+};
+
+/** Upgrade an anonymous account by linking an email address.
+ *  Supabase sends a confirmation link; after clicking it the account becomes permanent. */
+export const upgradeAnonymousAccount = async (email: string) => {
+  if (!isSupabaseConfigured) return { data: null, error: new Error('Supabase nincs konfigurálva') };
+  return supabase.auth.updateUser({ email });
+};
+
 export const getUsernameByFingerprint = async (fingerprint: string) => {
   if (!isSupabaseConfigured) return null;
   const { data, error } = await supabase
