@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, User, Mail, Pencil, Check, X, Send, CheckCircle, ShieldCheck, UserX } from 'lucide-react';
+import { ArrowLeft, User, Mail, Pencil, Check, X, Send, CheckCircle, ShieldCheck, UserX, RefreshCw } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import { Profile } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
 
@@ -49,6 +50,8 @@ export function LeaderboardView({
   const [upgradeError, setUpgradeError] = useState('');
   const [upgradeSending, setUpgradeSending] = useState(false);
   const [upgradeSent, setUpgradeSent] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState('');
 
   const handleUpgrade = async () => {
     if (!upgradeEmail.trim() || !upgradeEmail.includes('@')) {
@@ -208,9 +211,41 @@ export function LeaderboardView({
                   </div>
 
                   {upgradeSent ? (
-                    <div className="flex items-center gap-2 text-emerald-400 text-sm">
-                      <CheckCircle size={16} />
-                      <span>Ellenőrizd az emailedet és kattints a megerősítő linkre!</span>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start gap-2 text-emerald-400 text-sm">
+                        <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                        <span>Megerősítő email elküldve! Kattints a linkre a postaládádban.</span>
+                      </div>
+                      <div className="text-[11px] text-[#a89078] leading-relaxed bg-[#1a0f08] rounded-lg p-3 border border-white/5">
+                        <strong className="text-[#f0c866]">Ha más böngészőben/eszközön kattintottál a linkre:</strong>
+                        {' '}Jelentkezz ki, majd lépj be az Email tab-on a megadott email-cíemddel — a statisztikáid megmaradnak.
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setRefreshing(true);
+                          setRefreshMsg('');
+                          const { data, error } = await supabase.auth.refreshSession();
+                          setRefreshing(false);
+                          if (!error && data.session && !data.session.user.is_anonymous) {
+                            setRefreshMsg('✓ Fiók sikeresen véglegesítve!');
+                            // parent will re-render since session state updates via onAuthStateChange
+                          } else {
+                            setRefreshMsg('A megerősítés még folyamatban — próbáld újra pár másodperc múlva, vagy lépj be emailen.');
+                          }
+                        }}
+                        disabled={refreshing}
+                        className="flex items-center justify-center gap-2 w-full py-2 rounded-lg border border-emerald-500/30 text-emerald-400 text-sm hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {refreshing
+                          ? <span className="animate-spin w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full" />
+                          : <RefreshCw size={14} />}
+                        Már megerősítettem — frissítés
+                      </button>
+                      {refreshMsg && (
+                        <p className={`text-xs text-center ${refreshMsg.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {refreshMsg}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <>

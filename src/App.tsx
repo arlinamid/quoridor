@@ -83,10 +83,20 @@ export default function App() {
       else setView('auth');
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session) { loadProfile(session.user.id); checkActiveGame(session.user.id); setView(prev => prev === 'auth' ? 'menu' : prev); }
-      else setView('auth');
+      if (session) {
+        loadProfile(session.user.id);
+        checkActiveGame(session.user.id);
+        setView(prev => prev === 'auth' ? 'menu' : prev);
+        // Magic link confirmation or email upgrade completed in this browser
+        if (event === 'USER_UPDATED' || event === 'SIGNED_IN') {
+          setStatusMsg(event === 'USER_UPDATED' ? '✓ Email megerősítve — fiók véglegesítve!' : '');
+          setTimeout(() => setStatusMsg(''), 4000);
+        }
+      } else {
+        setView('auth');
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
