@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ThreeBackground } from './components/ThreeBackground';
 import {
   GameState, initState, mmRoot, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole,
-  teamsForOnlineLayout, viewerSharesWin, type OnlineTeamLayoutId,
+  teamsForOnlineLayout, viewerSharesWin, trapAffectsVictim, type OnlineTeamLayoutId,
 } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
@@ -38,6 +38,7 @@ export default function App() {
   const [animating, setAnimating] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [targetingSkill, setTargetingSkill] = useState<SkillType | null>(null);
+  const [trapHitFlash, setTrapHitFlash] = useState<{ r: number; c: number } | null>(null);
   const [showWin, setShowWin] = useState(false);
   const [winReason, setWinReason] = useState('');
   const [winnerIdx, setWinnerIdx] = useState(0);
@@ -89,6 +90,12 @@ export default function App() {
   // handleWinRef populated after handleWin is defined (see below)
   const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string, snap?: GameState) => void>(() => {});
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+
+  useEffect(() => {
+    if (!trapHitFlash) return;
+    const t = setTimeout(() => setTrapHitFlash(null), 700);
+    return () => clearTimeout(t);
+  }, [trapHitFlash]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { showWinRef.current = showWin; }, [showWin]);
   useEffect(() => { hostedGameDataRef.current = hostedGameData; }, [hostedGameData]);
@@ -589,7 +596,7 @@ export default function App() {
       alert('Már bent vagy egy online játékban! Előbb lépj ki belőle.');
       return;
     }
-    setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null);
+    setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null); setTrapHitFlash(null);
     if (difficulty) setAiDifficulty(difficulty);
     if (isOnlineMode(selectedMode)) {
       setMode(selectedMode);
@@ -624,13 +631,14 @@ export default function App() {
       next.lastMoveTime = Date.now();
       next.players[prev.turn].r = r;
       next.players[prev.turn].c = c;
-      const trapIdx = next.traps?.findIndex(t => t.r === r && t.c === c && t.owner !== prev.turn);
+      const trapIdx = next.traps?.findIndex(t => t.r === r && t.c === c && trapAffectsVictim(next, t.owner, prev.turn));
       if (trapIdx !== undefined && trapIdx !== -1) {
         next.traps!.splice(trapIdx, 1);
         const sp = PLAYER_START[prev.turn] ?? PLAYER_START[0];
         next.players[prev.turn].r = sp.r;
         next.players[prev.turn].c = sp.c;
         setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
+        queueMicrotask(() => setTrapHitFlash({ r, c }));
       }
       const isWin = hasWon(next.players[prev.turn]);
       if (!isWin) {
@@ -682,19 +690,28 @@ export default function App() {
   }, [mode, onlineGameId]);
 
   const executeSkill = useCallback((skill: SkillType, target?: { r: number; c: number }) => {
+    let skillApplyFailed = false;
     setAnimating(true);
     setGameState(prev => {
-      const { state: next } = applySkill(prev, skill, target);
+      const res = applySkill(prev, skill, target);
+      if (res.applied === false) {
+        skillApplyFailed = true;
+        return prev;
+      }
+      const next = res.state;
       if (skill === 'TELEPORT' || skill === 'SWAP' || skill === 'MAGNET') {
         for (let pi = 0; pi < next.players.length; pi++) {
           const pawn = next.players[pi];
-          const ti = next.traps?.findIndex(t => t.r === pawn.r && t.c === pawn.c && t.owner !== pi);
+          const ti = next.traps?.findIndex(t => t.r === pawn.r && t.c === pawn.c && trapAffectsVictim(next, t.owner, pi));
           if (ti !== undefined && ti !== -1) {
+            const hitR = pawn.r;
+            const hitC = pawn.c;
             next.traps!.splice(ti, 1);
             const sp = PLAYER_START[pi] ?? PLAYER_START[0];
             pawn.r = sp.r;
             pawn.c = sp.c;
             setStatusMsg(pi === prev.turn ? 'Csapdába léptél!' : 'Játékos csapdába lépett — startmező.');
+            queueMicrotask(() => setTrapHitFlash({ r: hitR, c: hitC }));
           }
         }
       }
@@ -708,6 +725,11 @@ export default function App() {
       if (isWin) setTimeout(() => handleWinRef.current(winnerIdx, false, '', next), 400);
       return next;
     });
+    if (skillApplyFailed) {
+      setAnimating(false);
+      if (skill === 'TRAP') setStatusMsg('Oda nem helyezhetsz csapdát (foglalt mező vagy már van ott csapda).');
+      return;
+    }
     setTargetingSkill(null);
     setTimeout(() => setAnimating(false), 350);
   }, [mode, onlineGameId, session]);
@@ -896,7 +918,38 @@ export default function App() {
             <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={handleMaxPlayersChange} teamLayout={onlineTeamLayout} onTeamLayoutChange={handleOnlineTeamLayoutChange} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
           )}
           {view === 'game' && (
-            <GameView key="game" gameState={gameState} mode={mode} wallMode={wallMode} wallOrient={wallOrient} animating={animating} statusMsg={statusMsg} targetingSkill={targetingSkill} timeLeft={timeLeft} onlineRole={onlineRole} profile={profile} playerProfiles={playerProfiles} onToggleWallMode={() => setWallMode(w => !w)} onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')} onMove={executeMove} onWallPlace={executeWall} onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })} onSetTargetingSkill={setTargetingSkill} onExecuteSkill={executeSkill} onDig={executeDig} onNewGame={() => startGame(mode)} onMenu={() => { setShowWin(false); if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame(); else setView('menu'); }} easterEgg={activeEgg} onEasterEggCollect={collect} />
+            <GameView
+              key="game"
+              gameState={gameState}
+              mode={mode}
+              wallMode={wallMode}
+              wallOrient={wallOrient}
+              animating={animating}
+              statusMsg={statusMsg}
+              targetingSkill={targetingSkill}
+              timeLeft={timeLeft}
+              onlineRole={onlineRole}
+              profile={profile}
+              playerProfiles={playerProfiles}
+              boardViewerIndex={isOnlineMode(mode) ? onlineRole : isAIMode(mode) ? 0 : null}
+              trapHitFlash={trapHitFlash}
+              onToggleWallMode={() => setWallMode(w => !w)}
+              onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')}
+              onMove={executeMove}
+              onWallPlace={executeWall}
+              onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })}
+              onSetTargetingSkill={setTargetingSkill}
+              onExecuteSkill={executeSkill}
+              onDig={executeDig}
+              onNewGame={() => startGame(mode)}
+              onMenu={() => {
+                setShowWin(false);
+                if (isOnlineMode(mode) && onlineGameId) handleLeaveOnlineGame();
+                else setView('menu');
+              }}
+              easterEgg={activeEgg}
+              onEasterEggCollect={collect}
+            />
           )}
           {view === 'leaderboard' && (
             <LeaderboardView

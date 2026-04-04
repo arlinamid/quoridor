@@ -24,7 +24,7 @@ const SKILL_META: Record<SkillType, { icon: React.ReactNode; label: string; desc
   SHIELD:    { icon: <Shield size={16} />,          label: 'Pajzs',     desc: '2 körre blokkolja a vízszintes falakat előtted',                    color: '#22d3ee' },
   WALLS:     { icon: <Plus size={16} />,            label: '+2 Fal',    desc: 'Azonnal kapsz 2 extra falat',                                        color: '#f0c866' },
   MAGNET:    { icon: <Magnet size={16} />,          label: 'Mágnes',    desc: 'Minden ellenfelet feléd húz (vízsz. vagy függ. tengely, max. 2 mező)', color: '#f472b6' },
-  TRAP:      { icon: <Crosshair size={16} />,       label: 'Csapda',    desc: 'Csapdát helyez el az aktuális cellán — ellenfelet visszadobja',     color: '#fb923c' },
+  TRAP:      { icon: <Crosshair size={16} />,       label: 'Csapda',    desc: 'Üres mezőre helyez csapdát (kattintás); az ellenfélnek rejtett, belépéskor aktiválódik', color: '#fb923c' },
   SWAP:      { icon: <ArrowLeftRight size={16} />,  label: 'Csere',     desc: 'Véletlen másik játékossal cserélsz helyet',                          color: '#34d399' },
 };
 
@@ -130,6 +130,9 @@ interface GameViewProps {
   onSkillTarget: (r: number, c: number) => void;
   onSetTargetingSkill: (s: SkillType | null) => void;
   onExecuteSkill: (skill: SkillType) => void;
+  /** null = helyi megosztott képernyő: mindenki látja a saját csapdáit jelölő ikont; szám = csak az adott szemszög (online / gép ellen). */
+  boardViewerIndex: number | null;
+  trapHitFlash: { r: number; c: number } | null;
   onDig: () => void;
   onNewGame: () => void;
   onMenu: () => void;
@@ -142,6 +145,7 @@ export function GameView({
   timeLeft, onlineRole, profile, playerProfiles,
   onToggleWallMode, onToggleWallOrient, onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
+  boardViewerIndex, trapHitFlash,
   easterEgg, onEasterEggCollect,
 }: GameViewProps) {
   const playerCount = gameState.players.length;
@@ -242,6 +246,8 @@ export function GameView({
         }
         targetingSkill={targetingSkill}
         onSkillTarget={onSkillTarget}
+        boardViewerIndex={boardViewerIndex}
+        trapHitFlash={trapHitFlash}
       />
 
       {/* Treasure mode: dig + skills */}
@@ -287,7 +293,7 @@ export function GameView({
                         active={targetingSkill === skill}
                         onClick={() => {
                           if (!canAct || isHidden) return;
-                          if (['TELEPORT', 'HAMMER', 'DYNAMITE'].includes(skill)) {
+                          if (['TELEPORT', 'HAMMER', 'DYNAMITE', 'TRAP'].includes(skill)) {
                             onSetTargetingSkill(targetingSkill === skill ? null : skill);
                           } else {
                             onExecuteSkill(skill);

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { GameState, v2w, isBlocked, getValidMoves, isValidWall, Wall, SkillType } from '../game/logic';
+import { Crosshair } from 'lucide-react';
+import { GameState, v2w, getValidMoves, isValidWall, Wall, SkillType, isValidTrapPlacement, viewerSeesTrapMarker } from '../game/logic';
 import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
 
@@ -14,9 +15,16 @@ interface BoardProps {
   disabled: boolean;
   targetingSkill?: SkillType | null;
   onSkillTarget?: (r: number, c: number) => void;
+  /** null: helyi képernyő — mindenki látja a csapda ikonokat; egyébként csak saját/csapat csapdák. */
+  boardViewerIndex?: number | null;
+  trapHitFlash?: { r: number; c: number } | null;
 }
 
-export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget }: BoardProps) {
+export function QuoridorBoard({
+  state, wallMode, wallOrient, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget,
+  boardViewerIndex = null,
+  trapHitFlash = null,
+}: BoardProps) {
   const n = state.playerCount ?? state.players.length;
   // 3-4 player: same min as 2-player (fits mobile), higher vw% and max for desktop
   const cellCls = n >= 3
@@ -111,14 +119,19 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
     
     if (targetingSkill === 'TELEPORT') {
       if (onSkillTarget) {
-        // Check distance <= 2 and empty cell
         const p = state.players[state.turn];
-        const o = state.players[1 - state.turn];
         const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
-        const isEmpty = !(r === o.r && c === o.c);
-        if (dist <= 2 && dist > 0 && isEmpty) {
+        const noPawnHere = !state.players.some((pl, idx) => idx !== state.turn && pl.r === r && pl.c === c);
+        if (dist <= 2 && dist > 0 && noPawnHere) {
           onSkillTarget(r, c);
         }
+      }
+      return;
+    }
+
+    if (targetingSkill === 'TRAP' && state.treasureMode) {
+      if (onSkillTarget && isValidTrapPlacement(state, r, c)) {
+        onSkillTarget(r, c);
       }
       return;
     }
@@ -152,8 +165,19 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
             if (dist <= 2 && dist > 0 && noPawnHere) isTeleportTarget = true;
           }
 
+          let isTrapTarget = false;
+          if (targetingSkill === 'TRAP' && state.treasureMode && isValidTrapPlacement(state, r, c)) {
+            isTrapTarget = true;
+          }
+
           const hasTreasure = state.treasureMode && state.treasures?.some(t => t.r === r && t.c === c);
-          const hasTrap = state.treasureMode && state.traps?.some(t => t.r === r && t.c === c);
+          const hasTrap =
+            state.treasureMode &&
+            state.traps?.some(t => {
+              if (t.r !== r || t.c !== c) return false;
+              if (boardViewerIndex === null) return true;
+              return viewerSeesTrapMarker(state, boardViewerIndex, t.owner);
+            });
 
           cells.push(
             <div
@@ -164,7 +188,8 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
                 r === 0 && "shadow-[inset_0_3px_0_#2c3e50]",
                 c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
                 c === 0 && "shadow-[inset_3px_0_0_#8e44ad]",
-                isValidMove ? "bg-[rgba(76,175,80,0.4)] cursor-pointer" : 
+                isValidMove ? "bg-[rgba(76,175,80,0.4)] cursor-pointer" :
+                isTrapTarget ? "bg-[rgba(251,146,60,0.45)] cursor-pointer shadow-[0_0_12px_rgba(251,146,60,0.55)]" :
                 isTeleportTarget ? "bg-[rgba(232,184,48,0.4)] cursor-pointer shadow-[0_0_10px_rgba(232,184,48,0.6)]" : "hover:bg-[#d4a87a] cursor-pointer"
               )}
               style={{ gridRow: vr + 1, gridColumn: vc + 1 }}
@@ -174,7 +199,7 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
                 <span className="text-[#e8b830] font-bold text-xl drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">?</span>
               )}
               {hasTrap && (
-                <span className="text-[#e74c3c] text-xl drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">⚠️</span>
+                <span className="text-[#e74c3c] text-lg drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]" title="Csapda (csak a te/csapatod szemszögéből)">⚠</span>
               )}
             </div>
           );
@@ -237,6 +262,25 @@ export function QuoridorBoard({ state, wallMode, wallOrient, onMove, onWallPlace
               />
             );
           })}
+
+          {trapHitFlash && (
+            <motion.div
+              key={`trapfx-${trapHitFlash.r}-${trapHitFlash.c}`}
+              className={cn(cellCls, "z-[25] pointer-events-none flex items-center justify-center rounded-sm bg-[#e74c3c]/35 border-2 border-[#e74c3c]")}
+              initial={{ scale: 0.35, opacity: 0 }}
+              animate={{ scale: [1, 1.15, 1], opacity: [1, 1, 0] }}
+              transition={{ duration: 0.55, ease: 'easeOut' }}
+              style={{
+                gridRow: trapHitFlash.r * 2 + 1,
+                gridColumn: trapHitFlash.c * 2 + 1,
+                justifySelf: 'center',
+                alignSelf: 'center',
+                boxShadow: '0 0 28px rgba(231,76,60,0.9)',
+              }}
+            >
+              <Crosshair className="w-[55%] h-[55%] text-[#e74c3c] drop-shadow-[0_0_8px_rgba(0,0,0,0.9)]" strokeWidth={2.5} />
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

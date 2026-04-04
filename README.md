@@ -307,7 +307,7 @@ Minden skill egy 56×56 px-es ikon gombként jelenik meg, játékos-specifikus a
 | SHIELD | 🛡 Shield | cián | 2 körre blokkolja a vízszintes falakat előtted |
 | WALLS | ➕ Plus | arany | Azonnal kapsz 2 extra falat |
 | MAGNET | 🧲 Magnet | rózsaszín | Ellenfelet 2 cellával közelebb húzza |
-| TRAP | 🎯 Crosshair | narancs | Csapda az aktuális cellán — ellenfelet visszadobja starthoz |
+| TRAP | 🎯 Crosshair | narancs | Üres mezőre helyezett csapda (ellenfélnek rejtett); belépéskor aktiválódik, visszadobja starthoz |
 | SWAP | ↔ ArrowLeftRight | zöld | Pozíció csere az ellenféllel |
 
 ---

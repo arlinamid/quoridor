@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole,
-  teamsForOnlineLayout, viewerSharesWin, cloneS, type GameState,
+  teamsForOnlineLayout, viewerSharesWin, cloneS, isValidTrapPlacement, trapAffectsVictim, viewerSeesTrapMarker,
+  type GameState,
 } from './logic';
 
 describe('hasWon', () => {
@@ -157,6 +158,50 @@ describe('MOLE (Vakond)', () => {
     s.players[0].effects = [{ type: 'MOLE', duration: 1 }];
     consumeActiveMole(s.players[0]);
     expect(s.players[0].effects?.some(e => e.type === 'MOLE')).toBe(false);
+  });
+});
+
+describe('TRAP', () => {
+  it('isValidTrapPlacement rejects occupied and duplicate trap cells', () => {
+    const s = initState(true, 2);
+    expect(isValidTrapPlacement(s, 0, 4)).toBe(false);
+    expect(isValidTrapPlacement(s, 5, 5)).toBe(true);
+    s.traps = [{ r: 5, c: 5, owner: 1 }];
+    expect(isValidTrapPlacement(s, 5, 5)).toBe(false);
+  });
+
+  it('places trap on chosen empty cell and consumes inventory', () => {
+    const s = initState(true, 2);
+    s.players[0].inventory = ['TRAP'];
+    const { state, applied } = applySkill(s, 'TRAP', { r: 5, c: 5 });
+    expect(applied).not.toBe(false);
+    expect(state.traps?.some(t => t.r === 5 && t.c === 5 && t.owner === 0)).toBe(true);
+    expect(state.players[0].inventory?.includes('TRAP')).toBe(false);
+  });
+
+  it('fails without target or on invalid cell without consuming inventory', () => {
+    const s = initState(true, 2);
+    s.players[0].inventory = ['TRAP'];
+    const noTarget = applySkill(s, 'TRAP');
+    expect(noTarget.applied).toBe(false);
+    expect(noTarget.state).toBe(s);
+    expect(s.players[0].inventory).toContain('TRAP');
+
+    const occupied = applySkill(s, 'TRAP', { r: 8, c: 4 });
+    expect(occupied.applied).toBe(false);
+    expect(s.players[0].inventory).toContain('TRAP');
+  });
+
+  it('trapAffectsVictim skips same team in team mode', () => {
+    const s = initState(false, 4, undefined, [0, 0, 1, 1]);
+    expect(trapAffectsVictim(s, 0, 1)).toBe(false);
+    expect(trapAffectsVictim(s, 0, 2)).toBe(true);
+  });
+
+  it('viewerSeesTrapMarker: teammates see each other traps on board', () => {
+    const s = initState(false, 4, undefined, [0, 0, 1, 1]);
+    expect(viewerSeesTrapMarker(s, 0, 1)).toBe(true);
+    expect(viewerSeesTrapMarker(s, 2, 1)).toBe(false);
   });
 });
 

@@ -59,6 +59,31 @@ export function viewerSharesWin(teams: number[] | undefined, winnerIdx: number, 
   return teams[winnerIdx] === teams[viewerIdx];
 }
 
+/** Üres mező, nincs bábu, nincs még csapda ezen a cellán. */
+export function isValidTrapPlacement(s: GameState, r: number, c: number): boolean {
+  if (r < 0 || r >= 9 || c < 0 || c >= 9) return false;
+  if (s.players.some(pl => pl.r === r && pl.c === c)) return false;
+  if (s.traps?.some(t => t.r === r && t.c === c)) return false;
+  return true;
+}
+
+/** A csapda aktiválódik-e, ha `victimIdx` rálép (nem a tulaj, csapatjátékban nem saját csapat). */
+export function trapAffectsVictim(s: GameState, trapOwner: number, victimIdx: number): boolean {
+  if (trapOwner === victimIdx) return false;
+  if (isTeamGameState(s) && s.teams && s.teams.length === s.players.length) {
+    return s.teams[trapOwner] !== s.teams[victimIdx];
+  }
+  return true;
+}
+
+/** Kinek látszik a csapda a táblán a lehelyezés után (ellenfélnek nem, csak „belépésre” derül ki). */
+export function viewerSeesTrapMarker(s: GameState, viewerIdx: number, trapOwner: number): boolean {
+  if (isTeamGameState(s) && s.teams && s.teams.length === s.players.length) {
+    return s.teams[viewerIdx] === s.teams[trapOwner];
+  }
+  return viewerIdx === trapOwner;
+}
+
 export function hasWon(p: Player): boolean {
   return (p.goalRow !== undefined && p.r === p.goalRow) ||
          (p.goalCol !== undefined && p.c === p.goalCol);
@@ -226,6 +251,8 @@ export type ApplySkillResult = {
   state: GameState;
   /** Index of the other player in a random SWAP (for trap / UI). */
   swapPartner?: number;
+  /** Ha false, a képesség nem került felhasználásra (pl. érvénytelen TRAP cél). */
+  applied?: boolean;
 };
 
 /**
@@ -237,6 +264,10 @@ export function applySkill(
   target?: { r: number; c: number },
   rng: () => number = Math.random
 ): ApplySkillResult {
+  if (skill === 'TRAP' && (!target || !isValidTrapPlacement(s, target.r, target.c))) {
+    return { state: s, applied: false };
+  }
+
   const ns = cloneS(s);
   const p = ns.players[ns.turn];
   let swapPartner: number | undefined;
@@ -307,7 +338,7 @@ export function applySkill(
     }
     case 'TRAP':
       if (!ns.traps) ns.traps = [];
-      ns.traps.push({ r: p.r, c: p.c, owner: ns.turn });
+      ns.traps.push({ r: target!.r, c: target!.c, owner: ns.turn });
       break;
     case 'SWAP': {
       const candidates = ns.players.map((_, i) => i).filter(i => i !== ns.turn);
