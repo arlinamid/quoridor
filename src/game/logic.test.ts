@@ -2,9 +2,62 @@ import { describe, expect, it } from 'vitest';
 import {
   hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, cloneS, isValidTrapPlacement, trapAffectsVictim, viewerSeesTrapMarker,
-  evHard, mmRoot,
+  evHard, mmRoot, opponentIndices, getWallCandidatesNearPath, greedyBotMove,
   type GameState,
 } from './logic';
+
+describe('opponentIndices', () => {
+  it('3p FFA: both other slots are opponents', () => {
+    const s = initState(false, 3);
+    expect(opponentIndices(s, 0).sort()).toEqual([1, 2]);
+  });
+  it('3p 1v2: solo sees both duo players as opponents', () => {
+    const teams = teamsForOnlineLayout('3_1v2', 3)!;
+    const s = initState(false, 3, undefined, teams);
+    expect(opponentIndices(s, 0).sort()).toEqual([1, 2]);
+  });
+  it('3p 1v2: duo member only opposes the solo player', () => {
+    const teams = teamsForOnlineLayout('3_1v2', 3)!;
+    const s = initState(false, 3, undefined, teams);
+    expect(opponentIndices(s, 1)).toEqual([0]);
+    expect(opponentIndices(s, 2)).toEqual([0]);
+  });
+  it('3p 2v1: duo sees only the solo opponent', () => {
+    const teams = teamsForOnlineLayout('3_2v1', 3)!;
+    const s = initState(false, 3, undefined, teams);
+    expect(opponentIndices(s, 0)).toEqual([2]);
+    expect(opponentIndices(s, 1)).toEqual([2]);
+    expect(opponentIndices(s, 2).sort()).toEqual([0, 1]);
+  });
+  it('4p 2v2: each side only sees the other pair as opponents', () => {
+    const teams = teamsForOnlineLayout('4_2v2', 4)!;
+    const s = initState(false, 4, undefined, teams);
+    expect(opponentIndices(s, 0).sort()).toEqual([2, 3]);
+    expect(opponentIndices(s, 1).sort()).toEqual([2, 3]);
+    expect(opponentIndices(s, 2).sort()).toEqual([0, 1]);
+    expect(opponentIndices(s, 3).sort()).toEqual([0, 1]);
+  });
+  it('4p FFA: everyone else is an opponent', () => {
+    const s = initState(false, 4);
+    expect(opponentIndices(s, 0).sort()).toEqual([1, 2, 3]);
+  });
+});
+
+describe('getWallCandidatesNearPath', () => {
+  it('returns many candidates for P3 bot (not broken 1 - pi index)', () => {
+    const s = initState(false, 3);
+    expect(getWallCandidatesNearPath(s, 2).length).toBeGreaterThan(20);
+  });
+});
+
+describe('greedyBotMove', () => {
+  it('returns a legal move for bot at index 2 in 3p', () => {
+    const s = initState(false, 3);
+    s.turn = 2;
+    const m = greedyBotMove(s, 2);
+    expect(m.type).toBe('move');
+  });
+});
 
 describe('hasWon', () => {
   it('detects goal row', () => {

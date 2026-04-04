@@ -427,12 +427,30 @@ export function isValidWall(s: GameState, wr: number, wc: number, o: 'h' | 'v') 
   return true;
 }
 
-// AI Logic (2-player only)
-export function getWC(s: GameState, ai: number) {
-  const opp = s.players[1 - ai];
+// AI Logic (2-player minimax + multi-player greedy bot)
+
+/** Csapatjátékban: másik csapat; FFA: minden másik játékos. */
+export function opponentIndices(s: GameState, pi: number): number[] {
+  const n = s.players.length;
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (i === pi) continue;
+    if (isTeamGameState(s) && s.teams && s.teams[i] === s.teams[pi]) continue;
+    out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Faljelöltek egy adott ellenfél útja és mezője körül (többjátékos-biztos).
+ * A régi `getWC` csak 2 játékosnál volt helyes (`1 - ai`).
+ */
+export function getWallCandidatesNearPath(s: GameState, targetPi: number): Wall[] {
+  const opp = s.players[targetPi];
+  if (!opp) return [];
   const cd: Wall[] = [];
   const tr = new Set<string>();
-  const path = bfsPath(s, 1 - ai);
+  const path = bfsPath(s, targetPi);
 
   for (const n of path.slice(0, 5)) {
     for (let dr = -1; dr <= 1; dr++) {
@@ -453,6 +471,13 @@ export function getWC(s: GameState, ai: number) {
     }
   }
   return cd;
+}
+
+/** 2 játékos + minimax: ellenfél index `1 - ai`. */
+export function getWC(s: GameState, ai: number) {
+  const oppIdx = 1 - ai;
+  if (oppIdx < 0 || oppIdx >= s.players.length) return [];
+  return getWallCandidatesNearPath(s, oppIdx);
 }
 
 export function bfsPath(s: GameState, pi: number) {
@@ -620,47 +645,69 @@ export function mmRoot(s: GameState, d: number, opts?: MMRootOptions): AIMove {
   return ba || { type: 'move', r: mv[0]?.r ?? s.players[1].r, c: mv[0]?.c ?? s.players[1].c };
 }
 
-// Greedy bot for any player index: picks the move that minimises BFS distance to goal.
-// Falls back to placing a wall that best blocks the closest opponent if no progress is possible.
+/**
+ * Online / többjátékos bot: erősebb greedy mint a nyers 2-játékos mmRoot, de olcsóbb.
+ * — Csak ellenfél-csapatot / FFA ellenfeleket veszi figyelembe falnál és döntetlennél.
+ * — Több egyforma „közelebb a célhoz” lépés közül azt választja, ami jobban hátráltatja
+ *   a legveszélyesebb (legközelebb a célhoz lévő) ellenfelet.
+ * — Faljelöltek: a cél felé legközelebb álló ellenfél útja (nem a hibás `1 - pi` index).
+ */
 export function greedyBotMove(s: GameState, pi: number): AIMove {
   const moves = getValidMoves(s, pi);
-  let bestMove: AIMove | null = null;
-  let bestDist = bfsDist(s, pi);
+  if (moves.length === 0) return { type: 'move', r: s.players[pi].r, c: s.players[pi].c };
 
-  for (const m of moves) {
+  const opps = opponentIndices(s, pi);
+  const minOppDist = (state: GameState) =>
+    opps.length === 0 ? 99 : Math.min(...opps.map(i => bfsDist(state, i)));
+
+  const baseSelf = bfsDist(s, pi);
+  const baseOppMin = minOppDist(s);
+
+  type Scored = { r: number; c: number; selfD: number; oppMin: number };
+  const scored: Scored[] = moves.map(m => {
     const ns = cloneS(s);
     ns.players[pi].r = m.r;
     ns.players[pi].c = m.c;
     consumeActiveMole(ns.players[pi]);
-    const d = bfsDist(ns, pi);
-    if (d < bestDist) { bestDist = d; bestMove = { type: 'move', r: m.r, c: m.c }; }
+    return { r: m.r, c: m.c, selfD: bfsDist(ns, pi), oppMin: minOppDist(ns) };
+  });
+
+  const progressing = scored.filter(x => x.selfD < baseSelf);
+  if (progressing.length > 0) {
+    const bestSelf = Math.min(...progressing.map(x => x.selfD));
+    const tier = progressing.filter(x => x.selfD === bestSelf);
+    const pick = tier.reduce((a, b) => (a.oppMin >= b.oppMin ? a : b));
+    return { type: 'move', r: pick.r, c: pick.c };
   }
 
-  // If a step forward was found, take it
-  if (bestMove) return bestMove;
-
-  // Try a wall that delays the leading opponent most
-  if (s.players[pi].walls > 0) {
-    const opponents = s.players
-      .map((_, i) => i)
-      .filter(i => i !== pi)
-      .sort((a, b) => bfsDist(s, a) - bfsDist(s, b));
-    const opp = opponents[0];
-    const baseDist = bfsDist(s, opp);
+  // Nincs rövidítő lépés: fal, ami a legközelebb a célhoz lévő ellenfelet hátráltatja
+  if (s.players[pi].walls > 0 && opps.length > 0) {
+    const threat = opps.reduce((a, b) => (bfsDist(s, a) <= bfsDist(s, b) ? a : b));
+    const baseThreat = bfsDist(s, threat);
     let bestWall: AIMove | null = null;
     let bestGain = 0;
-    for (const w of getWC(s, pi)) {
+    for (const w of getWallCandidatesNearPath(s, threat)) {
       if (!isValidWall(s, w.r, w.c, w.orient)) continue;
       const ns = cloneS(s);
       ns.walls.push(w);
+      ns.players[pi].walls--;
       consumeActiveMole(ns.players[pi]);
-      const gain = bfsDist(ns, opp) - baseDist;
-      if (gain > bestGain) { bestGain = gain; bestWall = { type: 'wall', r: w.r, c: w.c, orient: w.orient }; }
+      const gain = bfsDist(ns, threat) - baseThreat;
+      if (gain > bestGain) {
+        bestGain = gain;
+        bestWall = { type: 'wall', r: w.r, c: w.c, orient: w.orient };
+      }
     }
-    if (bestWall && bestGain >= 2) return bestWall;
+    if (bestWall && bestGain >= 1) return bestWall;
   }
 
-  // Fallback: any available move
-  if (moves.length > 0) return { type: 'move', r: moves[0].r, c: moves[0].c };
-  return { type: 'move', r: s.players[pi].r, c: s.players[pi].c };
+  // Oldalsó / kitérő: ne essünk szét — tartjuk a távolságot, közben ellenfelet hátráltatjuk ha lehet
+  const lateral = scored.filter(x => x.selfD === baseSelf);
+  if (lateral.length > 0) {
+    const pick = lateral.reduce((a, b) => (a.oppMin >= b.oppMin ? a : b));
+    if (pick.oppMin > baseOppMin) return { type: 'move', r: pick.r, c: pick.c };
+  }
+
+  const retreat = scored.reduce((a, b) => (a.selfD <= b.selfD ? a : b));
+  return { type: 'move', r: retreat.r, c: retreat.c };
 }
