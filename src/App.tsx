@@ -27,6 +27,7 @@ import { MenuView } from './components/views/MenuView';
 import { LobbyView } from './components/views/LobbyView';
 import { LeaderboardView } from './components/views/LeaderboardView';
 import { GameView } from './components/views/GameView';
+import { hu } from './i18n/hu/ui';
 
 export default function App() {
   const [view, setView] = useState<View>('auth');
@@ -124,7 +125,7 @@ export default function App() {
         setView(prev => prev === 'auth' ? 'menu' : prev);
         // Magic link confirmation or email upgrade completed in this browser
         if (event === 'USER_UPDATED' || event === 'SIGNED_IN') {
-          setStatusMsg(event === 'USER_UPDATED' ? '✓ Email megerősítve — fiók véglegesítve!' : '');
+          setStatusMsg(event === 'USER_UPDATED' ? hu.app.emailVerified : '');
           setTimeout(() => setStatusMsg(''), 4000);
         }
       } else {
@@ -345,7 +346,7 @@ export default function App() {
           resetOnlineSessionAfterMatch();
           if (!showWinRef.current) {
             setGameState(prev => ({ ...prev, gameOver: true }));
-            setWinReason('Játék lezárva — inaktivitás miatt.');
+            setWinReason(hu.app.gameAbandoned);
             setShowWin(true);
           }
         }
@@ -355,19 +356,19 @@ export default function App() {
         if (key !== session.user.id && disconnectTimerRef.current) {
           clearTimeout(disconnectTimerRef.current);
           disconnectTimerRef.current = null;
-          setStatusMsg('Ellenfél visszacsatlakozott!');
+          setStatusMsg(hu.app.opponentRejoined);
           setTimeout(() => setStatusMsg(''), 2500);
         }
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
         setConnectedUserIds(prev => { const next = new Set(prev); next.delete(key); return next; });
         if (key !== session.user.id && viewRef.current === 'game') {
-          setStatusMsg('Ellenfél kapcsolata megszakadt — 2 perc várakozás...');
+          setStatusMsg(hu.app.opponentDisconnect);
           disconnectTimerRef.current = setTimeout(() => {
             disconnectTimerRef.current = null;
             if (!channel.presenceState()[key] && viewRef.current === 'game' && !showWinRef.current && !gameStateRef.current.gameOver) {
               updateGameState(onlineGameId, { ...gameStateRef.current, gameOver: true }, 'finished', session.user.id);
-              handleWin(onlineRole, false, 'Ellenfél kilépett!');
+              handleWin(onlineRole, false, hu.app.opponentLeft);
             }
           }, 2 * 60 * 1000);
         }
@@ -448,7 +449,7 @@ export default function App() {
     const effectiveRoles = connectedHumanRoles.length > 0 ? connectedHumanRoles : humanRoles;
     const controllerRole = effectiveRoles.length > 0 ? Math.min(...effectiveRoles) : 0;
     if (onlineRole !== controllerRole) return;
-    setStatusMsg('Bot gondolkodik...');
+    setStatusMsg(hu.app.botThinking);
     const timer = setTimeout(() => {
       const move = greedyBotMove(gameState, botPi);
       setStatusMsg('');
@@ -460,7 +461,7 @@ export default function App() {
 
   useEffect(() => {
     if (view !== 'game' || !isAIMode(mode) || gameState.turn !== 1 || gameState.gameOver || animating) return;
-    setStatusMsg('A gép gondolkodik...');
+    setStatusMsg(hu.app.aiThinking);
     const hard = aiDifficulty === 'hard';
     const medium = aiDifficulty === 'medium';
     const depth =
@@ -521,7 +522,7 @@ export default function App() {
         if (isOnlineMode(currentMode) && currentGameId && currentRole === winner) {
           updateGameState(currentGameId, { ...gs, gameOver: true }, 'finished', currentSession?.user?.id);
         }
-        handleWinRef.current(winner, false, 'Időtúllépés miatt!');
+        handleWinRef.current(winner, false, hu.app.timeoutReason);
       } else {
         // 3-4 player: skip timed-out player's turn, reset clock
         if (isOnlineMode(currentMode) && currentGameId && currentRole === gs.turn) {
@@ -533,7 +534,7 @@ export default function App() {
             updateGameState(currentGameId!, next, 'playing');
             return next;
           });
-          setStatusMsg(`P${gs.turn + 1} időtúllépés — kör kihagyva!`);
+          setStatusMsg(hu.app.timeoutSkip(gs.turn + 1));
           setTimeout(() => setStatusMsg(''), 2500);
         } else if (!isOnlineMode(currentMode)) {
           setGameState(prev => {
@@ -543,7 +544,7 @@ export default function App() {
             advanceTurn(next);
             return next;
           });
-          setStatusMsg(`P${gs.turn + 1} időtúllépés — kör kihagyva!`);
+          setStatusMsg(hu.app.timeoutSkip(gs.turn + 1));
           setTimeout(() => setStatusMsg(''), 2500);
         }
       }
@@ -558,8 +559,9 @@ export default function App() {
         eggType
       );
       setProfile(p => ({ ...p, egg_wallet, collected_items }));
-      const label = eggType === 'EGG_RAINBOW' ? '🌈 Szivárvány Tojás' : eggType === 'EGG_GOLD' ? '🌟 Arany Tojás' : '🥚 Húsvéti Tojás';
-      setStatusMsg(`${label} gyűjtve! Egyenleg: ${egg_wallet[eggType]} db`);
+      const label =
+        eggType === 'EGG_RAINBOW' ? hu.app.eggRainbow : eggType === 'EGG_GOLD' ? hu.app.eggGold : hu.app.eggBasic;
+      setStatusMsg(hu.app.eggCollected(label, egg_wallet[eggType]));
       setTimeout(() => setStatusMsg(''), 3000);
     } catch (e) {
       console.error('Easter egg gyűjtési hiba:', e);
@@ -603,7 +605,7 @@ export default function App() {
 
   const startGame = useCallback((selectedMode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => {
     if (isOnlineMode(selectedMode) && onlineGameId) {
-      alert('Már bent vagy egy online játékban! Előbb lépj ki belőle.');
+      alert(hu.app.alertOnlineStuck);
       return;
     }
     setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null); setTrapHitFlash(null);
@@ -647,7 +649,7 @@ export default function App() {
         const sp = PLAYER_START[prev.turn] ?? PLAYER_START[0];
         next.players[prev.turn].r = sp.r;
         next.players[prev.turn].c = sp.c;
-        setStatusMsg('Csapdába léptél! Vissza a startvonalra.');
+        setStatusMsg(hu.app.trapStepped);
         queueMicrotask(() => setTrapHitFlash({ r, c }));
       }
       const isWin = hasWon(next.players[prev.turn]);
@@ -688,8 +690,8 @@ export default function App() {
         const SKILLS: SkillType[] = ['TELEPORT', 'HAMMER', 'SKIP', 'MOLE', 'DYNAMITE', 'SHIELD', 'WALLS', 'MAGNET', 'TRAP', 'SWAP'];
         const found = SKILLS[Math.floor(Math.random() * SKILLS.length)];
         if (!p.inventory) p.inventory = [];
-        if (p.inventory.length < 2) { p.inventory.push(found); setStatusMsg(`Találtál: ${found}`); }
-        else setStatusMsg(`Találtál (${found}), de tele az inventory!`);
+        if (p.inventory.length < 2) { p.inventory.push(found); setStatusMsg(hu.app.digFound(found)); }
+        else setStatusMsg(hu.app.digFull(found));
       }
       consumeActiveMole(next.players[prev.turn]);
       advanceTurn(next);
@@ -720,7 +722,7 @@ export default function App() {
             const sp = PLAYER_START[pi] ?? PLAYER_START[0];
             pawn.r = sp.r;
             pawn.c = sp.c;
-            setStatusMsg(pi === prev.turn ? 'Csapdába léptél!' : 'Játékos csapdába lépett — startmező.');
+            setStatusMsg(pi === prev.turn ? hu.app.trapSteppedShort : hu.app.trapOther);
             queueMicrotask(() => setTrapHitFlash({ r: hitR, c: hitC }));
           }
         }
@@ -737,7 +739,7 @@ export default function App() {
     });
     if (skillApplyFailed) {
       setAnimating(false);
-      if (skill === 'TRAP') setStatusMsg('Oda nem helyezhetsz csapdát (foglalt mező vagy már van ott csapda).');
+      if (skill === 'TRAP') setStatusMsg(hu.app.trapInvalid);
       return;
     }
     setTargetingSkill(null);
@@ -757,12 +759,12 @@ export default function App() {
       setOnlineRole(0);
       setGameState(state);
       setHostedGameData(data);
-    } else if (error) alert('Hiba a játék létrehozásakor: ' + error.message);
+    } else if (error) alert(hu.app.createGameError(error.message));
   };
 
   const handleJoinOnlineGame = async (gameId: string, state: any, p1Id: string, slotIndex: 1 | 2 | 3) => {
     if (!session) return;
-    if (p1Id === session.user.id) { alert('Nem csatlakozhatsz a saját játékodhoz!'); return; }
+    if (p1Id === session.user.id) { alert(hu.app.joinOwnGame); return; }
     setAuthLoading(true);
     const { data, error } = await joinGame(gameId, session.user.id, slotIndex);
     if (data) {
@@ -773,7 +775,7 @@ export default function App() {
       const pl = data.state?.pendingTeamLayout as OnlineTeamLayoutId | undefined;
       if (pl) setOnlineTeamLayout(pl);
       // Stay in lobby; subscription will move to game when host starts
-    } else if (error) alert('Hiba a csatlakozáskor: ' + error.message);
+    } else if (error) alert(hu.app.joinError(error.message));
     setAuthLoading(false);
   };
 
@@ -823,7 +825,7 @@ export default function App() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-[#0d0704] flex items-center justify-center text-[#f0c866] font-['Cinzel',serif] text-2xl tracking-widest">
-        Betöltés...
+        {hu.common.loading}
       </div>
     );
   }
@@ -855,9 +857,9 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button onClick={() => setView('leaderboard')} className="flex items-center gap-2 px-4 py-2 rounded-md bg-[#241810] border border-[#f0c866]/30 hover:bg-[#f0c866]/10 transition-colors text-sm uppercase tracking-wider">
                 <Trophy size={16} className="text-[#f0c866]" />
-                <span className="hidden sm:inline">Statisztika</span>
+                <span className="hidden sm:inline">{hu.common.stats}</span>
               </button>
-              <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#241810] border border-red-500/30 hover:bg-red-500/10 transition-colors text-sm uppercase tracking-wider text-red-400" title="Kijelentkezés">
+              <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#241810] border border-red-500/30 hover:bg-red-500/10 transition-colors text-sm uppercase tracking-wider text-red-400" title={hu.common.logoutTitle}>
                 <LogOut size={16} />
               </button>
             </div>
@@ -874,17 +876,17 @@ export default function App() {
           >
             <div className="bg-[#1a0f08] border border-[#f0c866]/50 rounded-xl p-4 flex items-center gap-4 shadow-[0_0_20px_rgba(240,200,102,0.1)]">
               <div className="flex-1">
-                <div className="font-bold text-[#f0c866] text-sm">Aktív játék található!</div>
-                <div className="text-xs text-[#a89078] mt-0.5">2 percen belül visszaléphetsz a folyamatban lévő meccsre.</div>
+                <div className="font-bold text-[#f0c866] text-sm">{hu.app.rejoinTitle}</div>
+                <div className="text-xs text-[#a89078] mt-0.5">{hu.app.rejoinBody}</div>
               </div>
               <button
                 onClick={() => handleRejoinGame(rejoinCandidate)}
                 className="bg-[#f0c866] text-[#1a0f08] font-bold px-4 py-2 rounded-lg text-sm uppercase tracking-wider hover:bg-[#f4d488] transition-colors shrink-0"
               >
-                Visszalépés
+                {hu.app.rejoinButton}
               </button>
               <button onClick={() => setRejoinCandidate(null)} className="text-[#a89078] hover:text-white transition-colors text-xs uppercase tracking-wider shrink-0">
-                Elvet
+                {hu.common.elvet}
               </button>
             </div>
           </motion.div>
@@ -1001,18 +1003,18 @@ export default function App() {
                 <h2 className="font-['Cinzel',serif] text-3xl font-bold text-[#f0c866] tracking-widest mb-2">
                   {isOnlineMode(mode)
                     ? teamModeOnlineWin
-                      ? (iWonOnline ? 'A csapatod győzött!' : 'A másik csapat győzött!')
-                      : (iWonOnline ? 'Nyertél!' : 'Vesztettél!')
-                    : (`Játékos ${winnerIdx + 1}` + (winnerIdx === 1 && isAIMode(mode) ? ' (Gép)' : '')) + ' Nyert!'}
+                      ? (iWonOnline ? hu.app.winTeam : hu.app.winOtherTeam)
+                      : (iWonOnline ? hu.app.winYou : hu.app.winLose)
+                    : hu.app.winPlayerLine(winnerIdx + 1, winnerIdx === 1 && isAIMode(mode))}
                 </h2>
                 {winReason && <p className="text-red-400 font-bold mb-2 uppercase tracking-wider">{winReason}</p>}
                 <p className="text-[#a89078] mb-8">
-                  {isAIMode(mode) && (winnerIdx === 0 ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
-                  {(mode === 'pvp' || mode === 'treasure-pvp') && '+20 XP megszerve!'}
-                  {isOnlineMode(mode) && (iWonOnline ? '+50 XP megszerve!' : '+10 XP a részvételért.')}
+                  {isAIMode(mode) && (winnerIdx === 0 ? hu.app.xpWinAi : hu.app.xpLoseAi)}
+                  {(mode === 'pvp' || mode === 'treasure-pvp') && hu.app.xpLocal}
+                  {isOnlineMode(mode) && (iWonOnline ? hu.app.xpWinOnline : hu.app.xpLoseOnline)}
                 </p>
                 <div className="flex flex-col gap-3">
-                  <button onClick={() => startGame(mode)} className="bg-[#f0c866] text-[#1a0f08] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f4d488] transition-colors">Újra</button>
+                  <button onClick={() => startGame(mode)} className="bg-[#f0c866] text-[#1a0f08] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f4d488] transition-colors">{hu.app.again}</button>
                   <button
                     onClick={() => {
                       setShowWin(false);
@@ -1021,7 +1023,7 @@ export default function App() {
                     }}
                     className="bg-transparent border border-[#f0c866]/30 text-[#f0c866] font-bold py-3 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f0c866]/10 transition-colors"
                   >
-                    Menü
+                    {hu.app.menu}
                   </button>
                 </div>
               </motion.div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Cpu, Globe, BookOpen, ArrowLeft, Sword, Map, ShoppingBag } from 'lucide-react';
 import { GameMode } from '../../lib/types';
+import { hu } from '../../i18n/hu/ui';
 
 type MenuStep = 'main' | '1v1' | 'ai' | 'ai-difficulty' | 'multiplayer';
 
@@ -44,7 +45,7 @@ export function MenuView({ onStartGame, onRules, onStore }: MenuViewProps) {
 
   const Back = ({ to }: { to: MenuStep }) => (
     <button className={BACK} onClick={() => setStep(to)}>
-      <ArrowLeft size={16} /> Vissza
+      <ArrowLeft size={16} /> {hu.common.back}
     </button>
   );
 
@@ -57,20 +58,20 @@ export function MenuView({ onStartGame, onRules, onStore }: MenuViewProps) {
       case 'main':
         return (
           <motion.div key="main" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={trans} className="flex flex-col gap-4 w-full">
-            <Btn label="1 vs 1" icon={<User size={18} />} onClick={() => setStep('1v1')} />
-            <Btn label="1 vs Gép" icon={<Cpu size={18} />} onClick={() => setStep('ai')} />
-            <Btn label="Multiplayer" icon={<Globe size={18} />} onClick={() => setStep('multiplayer')} />
-            <Btn label="Szabályok" icon={<BookOpen size={18} />} onClick={onRules} />
-            <Btn label="Áruház" icon={<ShoppingBag size={18} />} onClick={onStore} />
+            <Btn label={hu.menu.main1v1} icon={<User size={18} />} onClick={() => setStep('1v1')} />
+            <Btn label={hu.menu.mainAi} icon={<Cpu size={18} />} onClick={() => setStep('ai')} />
+            <Btn label={hu.menu.mainMulti} icon={<Globe size={18} />} onClick={() => setStep('multiplayer')} />
+            <Btn label={hu.menu.mainRules} icon={<BookOpen size={18} />} onClick={onRules} />
+            <Btn label={hu.menu.mainStore} icon={<ShoppingBag size={18} />} onClick={onStore} />
           </motion.div>
         );
 
       case '1v1':
         return (
           <motion.div key="1v1" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={trans} className="flex flex-col gap-4 w-full">
-            <Subtitle text="1 vs 1 — Játékmód" />
-            <Btn label="Normal" icon={<Sword size={18} />} onClick={() => onStartGame('pvp')} />
-            <BtnTreasure label="Kincskereső" icon={<Map size={18} />} onClick={() => onStartGame('treasure-pvp')} />
+            <Subtitle text={hu.menu.subtitle1v1} />
+            <Btn label={hu.menu.normal} icon={<Sword size={18} />} onClick={() => onStartGame('pvp')} />
+            <BtnTreasure label={hu.menu.treasure} icon={<Map size={18} />} onClick={() => onStartGame('treasure-pvp')} />
             <Back to="main" />
           </motion.div>
         );
@@ -78,9 +79,9 @@ export function MenuView({ onStartGame, onRules, onStore }: MenuViewProps) {
       case 'ai':
         return (
           <motion.div key="ai" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={trans} className="flex flex-col gap-4 w-full">
-            <Subtitle text="1 vs Gép — Játékmód" />
-            <Btn label="Normal" icon={<Sword size={18} />} onClick={() => { setPendingTreasure(false); setStep('ai-difficulty'); }} />
-            <BtnTreasure label="Kincskereső" icon={<Map size={18} />} onClick={() => { setPendingTreasure(true); setStep('ai-difficulty'); }} />
+            <Subtitle text={hu.menu.subtitleAi} />
+            <Btn label={hu.menu.normal} icon={<Sword size={18} />} onClick={() => { setPendingTreasure(false); setStep('ai-difficulty'); }} />
+            <BtnTreasure label={hu.menu.treasure} icon={<Map size={18} />} onClick={() => { setPendingTreasure(true); setStep('ai-difficulty'); }} />
             <Back to="main" />
           </motion.div>
         );
@@ -88,11 +89,11 @@ export function MenuView({ onStartGame, onRules, onStore }: MenuViewProps) {
       case 'ai-difficulty':
         return (
           <motion.div key="ai-diff" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={trans} className="flex flex-col gap-4 w-full">
-            <Subtitle text="Nehézségi Fokozat" />
+            <Subtitle text={hu.menu.subtitleDifficulty} />
             {(['easy', 'medium', 'hard'] as const).map(d => (
               <Btn
                 key={d}
-                label={d === 'easy' ? 'Könnyű' : d === 'medium' ? 'Közepes' : 'Nehéz'}
+                label={d === 'easy' ? hu.menu.easy : d === 'medium' ? hu.menu.medium : hu.menu.hard}
                 onClick={() => onStartGame(pendingTreasure ? 'treasure-ai' : 'ai', d)}
               />
             ))}
@@ -103,9 +104,9 @@ export function MenuView({ onStartGame, onRules, onStore }: MenuViewProps) {
       case 'multiplayer':
         return (
           <motion.div key="multiplayer" variants={stepVariants} initial="enter" animate="center" exit="exit" transition={trans} className="flex flex-col gap-4 w-full">
-            <Subtitle text="Online Multiplayer — Játékmód" />
-            <Btn label="Normal" icon={<Sword size={18} />} onClick={() => onStartGame('online')} />
-            <BtnTreasure label="Kincskereső" icon={<Map size={18} />} onClick={() => onStartGame('treasure-online')} />
+            <Subtitle text={hu.menu.subtitleMulti} />
+            <Btn label={hu.menu.normal} icon={<Sword size={18} />} onClick={() => onStartGame('online')} />
+            <BtnTreasure label={hu.menu.treasure} icon={<Map size={18} />} onClick={() => onStartGame('treasure-online')} />
             <Back to="main" />
           </motion.div>
         );

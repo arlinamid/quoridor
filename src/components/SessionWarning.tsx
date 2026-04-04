@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
+import { hu } from '../i18n/hu/ui';
 
 const DISMISS_KEY = 'quoridor_easter_warning_dismissed_2026';
 
@@ -37,7 +38,7 @@ export function SessionWarning() {
           <button
             onClick={dismiss}
             className="text-[#a89078] hover:text-[#f0c866] transition-colors shrink-0 p-1 rounded"
-            title="Bezárás"
+            title={hu.common.close}
           >
             <X size={16} />
           </button>

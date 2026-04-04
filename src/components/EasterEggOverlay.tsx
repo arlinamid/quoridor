@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CollectibleType, COLLECTIBLE_META } from '../lib/types';
+import { hu } from '../i18n/hu/ui';
 import { rollEggAt } from '../lib/easterEggRoll';
 
 /** Min real time between spawn *attempts* while in-game (turn changes can be very frequent). */
@@ -93,7 +94,7 @@ export function EasterEggFloater({ egg, onCollect }: EasterEggFloaterProps) {
         />
       </motion.div>
       <div className="bg-[#1a0f08]/90 border border-[#f0c866]/30 rounded-full px-3 py-0.5 text-xs text-[#f0c866] font-bold tracking-wide whitespace-nowrap">
-        Kattints! ({timeLeft}s)
+        {hu.easter.clickCollect(timeLeft)}
       </div>
     </motion.button>
   );

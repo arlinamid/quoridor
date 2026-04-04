@@ -4,6 +4,7 @@ import { ArrowLeft, User, Mail, Pencil, Check, X, Send, CheckCircle, ShieldCheck
 import { supabase, Profile, formatEmailAuthError, isEmailRateLimitError } from '../../lib/supabase';
 import { useEmailSendCooldown } from '../../lib/useEmailSendCooldown';
 import { cn } from '../../lib/utils';
+import { hu } from '../../i18n/hu/ui';
 
 interface LeaderboardViewProps {
   profile: Profile;
@@ -61,7 +62,7 @@ export function LeaderboardView({
 
   const handleUpgrade = async () => {
     if (!upgradeEmail.trim() || !upgradeEmail.includes('@')) {
-      setUpgradeError('Adj meg egy érvényes email-címet.');
+      setUpgradeError(hu.leaderboard.upgradeEmailInvalid);
       return;
     }
     if (upgradeCooldownBlock) {
@@ -95,7 +96,7 @@ export function LeaderboardView({
             <ArrowLeft size={24} />
           </button>
           <h2 className="font-['Cinzel',serif] text-2xl font-bold text-[#f0c866] tracking-widest uppercase">
-            Statisztika
+            {hu.common.stats}
           </h2>
         </div>
 
@@ -110,7 +111,7 @@ export function LeaderboardView({
                 tab === t ? "border-[#f0c866] text-[#f0c866]" : "border-transparent text-[#a89078] hover:text-white"
               )}
             >
-              {t === 'personal' ? 'Saját Profil' : 'Ranglista'}
+              {t === 'personal' ? hu.leaderboard.tabPersonal : hu.leaderboard.tabOnline}
             </button>
           ))}
         </div>
@@ -124,7 +125,7 @@ export function LeaderboardView({
                   <User className="text-[#f0c866]" size={40} />
                 </div>
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#f0c866] text-[#1a0f08] text-xs font-bold px-3 py-1 rounded-full border-2 border-[#1a0f08] whitespace-nowrap">
-                  Lvl {profile.level}
+                  {hu.leaderboard.lvlShort} {profile.level}
                 </div>
               </div>
 
@@ -150,7 +151,7 @@ export function LeaderboardView({
                 ) : (
                   <>
                     <h3 className="text-xl font-bold uppercase tracking-wider">{profile.username}</h3>
-                    <button onClick={() => { setEditingName(true); setNameInput(profile.username); }} className="text-[#a89078] hover:text-[#f0c866] transition-colors" title="Névváltoztatás">
+                    <button onClick={() => { setEditingName(true); setNameInput(profile.username); }} className="text-[#a89078] hover:text-[#f0c866] transition-colors" title={hu.leaderboard.editNameTitle}>
                       <Pencil size={14} />
                     </button>
                   </>
@@ -165,7 +166,7 @@ export function LeaderboardView({
                   : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
               )}>
                 {isAnonymous ? <UserX size={11} /> : <ShieldCheck size={11} />}
-                {isAnonymous ? 'Vendég fiók' : userEmail ? `Regisztrált · ${userEmail}` : 'Regisztrált fiók'}
+                {isAnonymous ? hu.leaderboard.guestAccount : userEmail ? hu.leaderboard.registeredWithEmail(userEmail) : hu.leaderboard.registered}
               </div>
             </div>
 
@@ -173,7 +174,7 @@ export function LeaderboardView({
             <div>
               <div className="flex justify-between items-center mb-1">
                 <span className="text-xs text-[#a89078]">{profile.xp} XP</span>
-                <span className="text-xs text-[#a89078]">Következő szint: {xpForNextLevel} XP</span>
+                <span className="text-xs text-[#a89078]">{hu.leaderboard.nextLevelXp(xpForNextLevel)}</span>
               </div>
               <div className="w-full h-2.5 bg-[#241810] rounded-full overflow-hidden border border-white/5">
                 <div
@@ -182,8 +183,8 @@ export function LeaderboardView({
                 />
               </div>
               <div className="w-full flex justify-between text-[10px] text-[#a89078] mt-1 uppercase tracking-wider">
-                <span>Lvl {profile.level}</span>
-                <span>Lvl {profile.level + 1}</span>
+                <span>{hu.leaderboard.lvlShort} {profile.level}</span>
+                <span>{hu.leaderboard.lvlShort} {profile.level + 1}</span>
               </div>
             </div>
 
@@ -191,25 +192,25 @@ export function LeaderboardView({
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-[#241810] p-4 rounded-xl border border-white/5 text-center">
                 <div className="text-3xl font-light text-[#4caf50] mb-1">{profile.wins}</div>
-                <div className="text-xs text-[#a89078] uppercase tracking-wider">Győzelem</div>
+                <div className="text-xs text-[#a89078] uppercase tracking-wider">{hu.leaderboard.statWin}</div>
               </div>
               <div className="bg-[#241810] p-4 rounded-xl border border-white/5 text-center">
                 <div className="text-3xl font-light text-[#e74c3c] mb-1">{profile.losses}</div>
-                <div className="text-xs text-[#a89078] uppercase tracking-wider">Vereség</div>
+                <div className="text-xs text-[#a89078] uppercase tracking-wider">{hu.leaderboard.statLoss}</div>
               </div>
               <div className="bg-[#241810] p-4 rounded-xl border border-white/5 text-center">
                 <div className="text-3xl font-light text-[#f0c866] mb-1">{totalGames}</div>
-                <div className="text-xs text-[#a89078] uppercase tracking-wider">Összes meccs</div>
+                <div className="text-xs text-[#a89078] uppercase tracking-wider">{hu.leaderboard.statTotal}</div>
               </div>
               <div className="bg-[#241810] p-4 rounded-xl border border-white/5 text-center">
                 <div className="text-3xl font-light text-[#a78bfa] mb-1">{winRate}%</div>
-                <div className="text-xs text-[#a89078] uppercase tracking-wider">Win rate</div>
+                <div className="text-xs text-[#a89078] uppercase tracking-wider">{hu.leaderboard.statWinRate}</div>
               </div>
             </div>
 
             {/* Privacy & marketing opt-out */}
             <div className="rounded-xl border border-white/10 bg-[#1a0f08]/40 p-4 space-y-3">
-              <div className="text-xs font-bold text-[#f0c866] uppercase tracking-wider">Adatvédelem és értesítések</div>
+              <div className="text-xs font-bold text-[#f0c866] uppercase tracking-wider">{hu.leaderboard.privacySectionTitle}</div>
               <label className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="checkbox"
@@ -218,15 +219,15 @@ export function LeaderboardView({
                   className="mt-1 w-4 h-4 rounded border-white/20 bg-[#241810] text-[#f0c866] focus:ring-[#f0c866]/50"
                 />
                 <span className="text-[11px] text-[#a89078] leading-relaxed group-hover:text-[#c8b090] transition-colors">
-                  <strong className="text-[#f5e6d3]">Marketing opt-out:</strong> nem kérek opcionális marketing- vagy promóciós megkereséseket (pl. email). Jelenleg ilyen küldeményt nem használunk; a beállítás a jövőbeli tájékoztatáshoz szolgál, és a profilodban tároljuk.
+                  <strong className="text-[#f5e6d3]">{hu.leaderboard.marketingOptOutStrong}</strong> {hu.leaderboard.marketingOptOutRest}
                 </span>
               </label>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
                 <button type="button" onClick={onOpenTos} className="text-[#f0c866] hover:underline underline-offset-2">
-                  ÁSZF
+                  {hu.leaderboard.tos}
                 </button>
                 <button type="button" onClick={onOpenPrivacy} className="text-[#f0c866] hover:underline underline-offset-2">
-                  Adatvédelmi tájékoztató
+                  {hu.leaderboard.privacyPolicy}
                 </button>
               </div>
             </div>
@@ -242,9 +243,9 @@ export function LeaderboardView({
                   <div className="flex items-start gap-2">
                     <Mail size={16} className="text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-bold text-amber-400 text-sm">Fiók véglegesítése</div>
+                      <div className="font-bold text-amber-400 text-sm">{hu.leaderboard.upgradeTitle}</div>
                       <div className="text-[11px] text-[#a89078] mt-0.5 leading-relaxed">
-                        Adj meg egy email-címet a statisztikáid megőrzéséhez. Jelszó nem szükséges — magic link-en keresztül léphetsz be bármikor.
+                        {hu.leaderboard.upgradeIntro}
                       </div>
                     </div>
                   </div>
@@ -253,11 +254,11 @@ export function LeaderboardView({
                     <div className="flex flex-col gap-3">
                       <div className="flex items-start gap-2 text-emerald-400 text-sm">
                         <CheckCircle size={16} className="shrink-0 mt-0.5" />
-                        <span>Megerősítő email elküldve! Kattints a linkre a postaládádban.</span>
+                        <span>{hu.leaderboard.upgradeConfirmSent}</span>
                       </div>
                       <div className="text-[11px] text-[#a89078] leading-relaxed bg-[#1a0f08] rounded-lg p-3 border border-white/5">
-                        <strong className="text-[#f0c866]">Ha más böngészőben/eszközön kattintottál a linkre:</strong>
-                        {' '}Jelentkezz ki, majd lépj be az Email tab-on a megadott email-cíemddel — a statisztikáid megmaradnak.
+                        <strong className="text-[#f0c866]">{hu.leaderboard.upgradeOtherDeviceBold}</strong>
+                        {' '}{hu.leaderboard.upgradeOtherDeviceRest}
                       </div>
                       <button
                         onClick={async () => {
@@ -266,10 +267,10 @@ export function LeaderboardView({
                           const { data, error } = await supabase.auth.refreshSession();
                           setRefreshing(false);
                           if (!error && data.session && !data.session.user.is_anonymous) {
-                            setRefreshMsg('✓ Fiók sikeresen véglegesítve!');
+                            setRefreshMsg(hu.leaderboard.upgradeRefreshOk);
                             // parent will re-render since session state updates via onAuthStateChange
                           } else {
-                            setRefreshMsg('A megerősítés még folyamatban — próbáld újra pár másodperc múlva, vagy lépj be emailen.');
+                            setRefreshMsg(hu.leaderboard.upgradeRefreshPending);
                           }
                         }}
                         disabled={refreshing}
@@ -278,7 +279,7 @@ export function LeaderboardView({
                         {refreshing
                           ? <span className="animate-spin w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full" />
                           : <RefreshCw size={14} />}
-                        Már megerősítettem — frissítés
+                        {hu.leaderboard.upgradeRefresh}
                       </button>
                       {refreshMsg && (
                         <p className={`text-xs text-center ${refreshMsg.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -291,7 +292,7 @@ export function LeaderboardView({
                       <div className="flex gap-2">
                         <input
                           type="email"
-                          placeholder="pelda@email.com"
+                          placeholder={hu.auth.emailPlaceholder}
                           value={upgradeEmail}
                           onChange={e => { setUpgradeEmail(e.target.value); setUpgradeError(''); }}
                           onKeyDown={e => e.key === 'Enter' && handleUpgrade()}
@@ -305,7 +306,7 @@ export function LeaderboardView({
                           {upgradeSending
                             ? <span className="animate-spin w-4 h-4 border-2 border-[#1a0f08] border-t-transparent rounded-full" />
                             : <Send size={14} />}
-                          {upgradeSending ? '…' : upgradeCooldownRemaining > 0 ? `${upgradeCooldownRemaining}s` : 'Küldés'}
+                          {upgradeSending ? hu.leaderboard.upgradeSending : upgradeCooldownRemaining > 0 ? hu.leaderboard.upgradeCooldown(upgradeCooldownRemaining) : hu.leaderboard.upgradeSend}
                         </button>
                       </div>
                       {upgradeError && <p className="text-xs text-red-400">{upgradeError}</p>}
@@ -317,17 +318,17 @@ export function LeaderboardView({
 
             <div className="text-center text-xs text-[#a89078]/50">
               {isSupabaseConfigured
-                ? 'A statisztikák a Supabase felhőben szinkronizálva vannak.'
-                : 'A statisztikák jelenleg lokálisan mentődnek.'}
+                ? hu.leaderboard.statsCloud
+                : hu.leaderboard.statsLocal}
             </div>
           </div>
         ) : (
           /* Leaderboard tab */
           <div className="flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-2 custom-scrollbar">
             {!isSupabaseConfigured ? (
-              <div className="text-center text-[#a89078] py-8">A ranglista használatához Supabase kapcsolat szükséges.</div>
+              <div className="text-center text-[#a89078] py-8">{hu.leaderboard.needSupabaseForLb}</div>
             ) : leaderboardData.length === 0 ? (
-              <div className="text-center text-[#a89078] py-8">Betöltés...</div>
+              <div className="text-center text-[#a89078] py-8">{hu.common.loading}</div>
             ) : (
               leaderboardData.map((p, index) => (
                 <div
@@ -349,12 +350,12 @@ export function LeaderboardView({
                     </div>
                     <div>
                       <div className="font-bold uppercase tracking-wider text-sm">{p.username}</div>
-                      <div className="text-[#a89078] text-xs">Lvl {p.level}</div>
+                      <div className="text-[#a89078] text-xs">{hu.leaderboard.lvlShort} {p.level}</div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-[#f0c866] font-bold">{p.xp} XP</div>
-                    <div className="text-[10px] text-[#a89078] uppercase">{p.wins}W · {p.losses}L</div>
+                    <div className="text-[10px] text-[#a89078] uppercase">{hu.leaderboard.wlRecord(p.wins, p.losses)}</div>
                   </div>
                 </div>
               ))

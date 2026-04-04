@@ -12,21 +12,30 @@ import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/type
 import { QuoridorBoard } from '../QuoridorBoard';
 import { PLAYER_COLORS, PLAYER_LABELS } from './LobbyView';
 import { cn } from '../../lib/utils';
+import { hu } from '../../i18n/hu/ui';
 
-// ── Skill meta ──────────────────────────────────────────────────────────────
+// ── Skill meta (szöveg: hu.skills) ───────────────────────────────────────────
 
-const SKILL_META: Record<SkillType, { icon: React.ReactNode; label: string; desc: string; color: string }> = {
-  TELEPORT:  { icon: <Zap size={16} />,            label: 'Teleport',  desc: 'Ugrás legfeljebb 2 cellára (célpont kijelölése szükséges)',         color: '#a78bfa' },
-  HAMMER:    { icon: <Hammer size={16} />,          label: 'Kalapács',  desc: 'Egy fal lerombolása (célpont kijelölése szükséges)',                 color: '#f97316' },
-  SKIP:      { icon: <SkipForward size={16} />,     label: 'Kihagyás',  desc: 'A következő játékos a körből kimarad (2–4 fő)',                       color: '#38bdf8' },
-  MOLE:      { icon: <Pickaxe size={16} />,         label: 'Vakond',    desc: 'Következő körben átsétálhatsz falakon',                              color: '#a3e635' },
-  DYNAMITE:  { icon: <Flame size={16} />,           label: 'Dinamit',   desc: 'Egy metszésponthoz csatlakozó összes falat felrobbantja (célpont)', color: '#ef4444' },
-  SHIELD:    { icon: <Shield size={16} />,          label: 'Pajzs',     desc: '2 körre blokkolja a vízszintes falakat előtted',                    color: '#22d3ee' },
-  WALLS:     { icon: <Plus size={16} />,            label: '+2 Fal',    desc: 'Azonnal kapsz 2 extra falat',                                        color: '#f0c866' },
-  MAGNET:    { icon: <Magnet size={16} />,          label: 'Mágnes',    desc: 'Minden ellenfelet feléd húz (vízsz. vagy függ. tengely, max. 2 mező)', color: '#f472b6' },
-  TRAP:      { icon: <Crosshair size={16} />,       label: 'Csapda',    desc: 'Üres mezőre helyez csapdát (kattintás); az ellenfélnek rejtett, belépéskor aktiválódik', color: '#fb923c' },
-  SWAP:      { icon: <ArrowLeftRight size={16} />,  label: 'Csere',     desc: 'Véletlen másik játékossal cserélsz helyet',                          color: '#34d399' },
+const SKILL_ICON_COLOR: Record<SkillType, { icon: React.ReactNode; color: string }> = {
+  TELEPORT:  { icon: <Zap size={16} />,            color: '#a78bfa' },
+  HAMMER:    { icon: <Hammer size={16} />,          color: '#f97316' },
+  SKIP:      { icon: <SkipForward size={16} />,     color: '#38bdf8' },
+  MOLE:      { icon: <Pickaxe size={16} />,         color: '#a3e635' },
+  DYNAMITE:  { icon: <Flame size={16} />,           color: '#ef4444' },
+  SHIELD:    { icon: <Shield size={16} />,          color: '#22d3ee' },
+  WALLS:     { icon: <Plus size={16} />,            color: '#f0c866' },
+  MAGNET:    { icon: <Magnet size={16} />,          color: '#f472b6' },
+  TRAP:      { icon: <Crosshair size={16} />,       color: '#fb923c' },
+  SWAP:      { icon: <ArrowLeftRight size={16} />,  color: '#34d399' },
 };
+
+const SKILL_META: Record<SkillType, { icon: React.ReactNode; label: string; desc: string; color: string }> =
+  (Object.keys(SKILL_ICON_COLOR) as SkillType[]).reduce((acc, k) => {
+    const ic = SKILL_ICON_COLOR[k];
+    const t = hu.skills[k];
+    acc[k] = { icon: ic.icon, color: ic.color, label: t.label, desc: t.desc };
+    return acc;
+  }, {} as Record<SkillType, { icon: React.ReactNode; label: string; desc: string; color: string }>);
 
 // ── Skill button with tooltip ────────────────────────────────────────────────
 
@@ -47,7 +56,7 @@ function SkillButton({ skill, canAct, hidden, active, onClick }: SkillButtonProp
       <button
         onClick={onClick}
         disabled={!canAct}
-        aria-label={hidden ? 'Ismeretlen skill' : meta.label}
+        aria-label={hidden ? hu.game.skillUnknownTitle : meta.label}
         className={cn(
           'flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-xl border-2 transition-all duration-150',
           'text-[10px] font-bold uppercase tracking-wide leading-none select-none',
@@ -67,7 +76,7 @@ function SkillButton({ skill, canAct, hidden, active, onClick }: SkillButtonProp
         }
       >
         {hidden ? <Lock size={16} className="opacity-40" /> : meta.icon}
-        <span>{hidden ? '???' : meta.label}</span>
+        <span>{hidden ? hu.game.skillHiddenPlaceholder : meta.label}</span>
       </button>
 
       {/* Tooltip */}
@@ -90,7 +99,7 @@ function SkillButton({ skill, canAct, hidden, active, onClick }: SkillButtonProp
                 </div>
               )}
               <div className="text-[11px] text-[#c8b090] max-w-[180px] whitespace-normal leading-snug">
-                {hidden ? 'Az ellenfél skillje — nem látható' : meta.desc}
+                {hidden ? hu.game.skillUnknownDesc : meta.desc}
               </div>
               {/* Arrow */}
               <div
@@ -158,13 +167,13 @@ export function GameView({
   };
 
   const getPlayerName = (pi: number) => {
-    if (botPlayers.includes(pi)) return 'Bot';
-    if (isAIMode(mode) && pi === 1) return 'Gép (AI)';
+    if (botPlayers.includes(pi)) return hu.common.bot;
+    if (isAIMode(mode) && pi === 1) return hu.game.playerAi;
     if (isOnlineMode(mode)) {
       if (pi === onlineRole) return profile.username;
       return playerProfiles[pi]?.username || PLAYER_LABELS[pi];
     }
-    return `Játékos ${pi + 1}`;
+    return hu.game.playerHuman(pi + 1);
   };
 
   const canActPlayer = (playerIndex: number) => {
@@ -214,10 +223,10 @@ export function GameView({
                         teamLetter(pi) === 'A' ? 'text-cyan-400/95' : 'text-rose-400/95',
                       )}
                     >
-                      {' '}· csapat {teamLetter(pi)}
+                      {hu.game.teamChip(teamLetter(pi)!)}
                     </span>
                   )}
-                  {' · '}{p.walls} fal
+                  {' · '}{hu.game.wallsCount(p.walls)}
                 </div>
               </div>
             </div>
@@ -226,7 +235,7 @@ export function GameView({
 
         {/* Timer */}
         <div className="font-['Cinzel',serif] text-xs text-[#f0c866] tracking-[2px] text-center shrink-0 flex flex-col items-center gap-0.5 px-2">
-          <span className="text-[10px] uppercase">{PLAYER_LABELS[gameState.turn]} köre</span>
+          <span className="text-[10px] uppercase">{hu.game.turnOf(PLAYER_LABELS[gameState.turn])}</span>
           <span className={cn("text-lg font-bold font-mono", timeLeft <= 10 ? "text-red-500 animate-pulse" : "text-[#f0c866]")}>
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </span>
@@ -262,7 +271,7 @@ export function GameView({
               onClick={onDig}
               className="bg-[#e8b830] text-[#1a0f0a] font-bold px-6 py-2 rounded-md text-sm hover:bg-[#f0c866] transition-all shadow-[0_0_15px_rgba(232,184,48,0.4)]"
             >
-              ⛏️ Kincs kiásása (1 kör)
+              {hu.game.digButton}
             </button>
           )}
 
@@ -318,27 +327,27 @@ export function GameView({
             wallMode ? "border-[#e8b830] text-[#e8b830] bg-[#e8b830]/10" : "border-white/10 text-[#a89078] hover:border-[#f0c866] hover:text-[#f0c866]"
           )}
         >
-          Fal lerakása
+          {hu.game.wallModeOn}
         </button>
         {wallMode && (
           <button
             onClick={onToggleWallOrient}
             className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"
           >
-            {wallOrient === 'h' ? '↔ Vízszintes' : '↕ Függőleges'}
+            {wallOrient === 'h' ? hu.game.wallOrientH : hu.game.wallOrientV}
           </button>
         )}
         <button
           onClick={onNewGame}
           className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"
         >
-          Új játék
+          {hu.game.newGame}
         </button>
         <button
           onClick={onMenu}
           className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"
         >
-          Menü
+          {hu.game.menu}
         </button>
       </div>
 

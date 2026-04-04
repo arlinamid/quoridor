@@ -4,6 +4,7 @@ import { User, Mail, Send, CheckCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { formatEmailAuthError, isEmailRateLimitError } from '../../lib/supabase';
 import { useEmailSendCooldown } from '../../lib/useEmailSendCooldown';
+import { hu } from '../../i18n/hu/ui';
 
 interface AuthViewProps {
   usernameInput: string;
@@ -33,7 +34,7 @@ export function AuthView({
 
   const handleMagicLink = async () => {
     if (!email.trim() || !email.includes('@')) {
-      setEmailError('Adj meg egy érvényes email-címet.');
+      setEmailError(hu.auth.emailInvalid);
       return;
     }
     if (emailCooldownBlock) {
@@ -67,7 +68,7 @@ export function AuthView({
           QUORIDOR
         </h1>
         <div className="w-20 h-px bg-gradient-to-r from-transparent via-[#f0c866] to-transparent mx-auto my-4" />
-        <div className="text-sm text-[#a89078] tracking-[4px] uppercase">Jelentkezz be a játékhoz</div>
+        <div className="text-sm text-[#a89078] tracking-[4px] uppercase">{hu.auth.titleSub}</div>
       </div>
 
       <div className="bg-[#1a0f08]/90 backdrop-blur-xl border border-[#f0c866]/30 p-8 rounded-2xl w-full shadow-2xl flex flex-col gap-6">
@@ -84,7 +85,7 @@ export function AuthView({
                   tab === t ? "border-[#f0c866] text-[#f0c866]" : "border-transparent text-[#a89078] hover:text-white"
                 )}
               >
-                {t === 'guest' ? <><User size={12} /> Vendég</> : <><Mail size={12} /> Email</>}
+                {t === 'guest' ? <><User size={12} /> {hu.auth.tabGuest}</> : <><Mail size={12} /> {hu.auth.tabEmail}</>}
               </button>
             ))}
           </div>
@@ -95,10 +96,10 @@ export function AuthView({
           {tab === 'guest' && (
             <motion.div key="guest" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <label className="text-xs text-[#a89078] uppercase tracking-wider">Felhasználónév (opcionális)</label>
+                <label className="text-xs text-[#a89078] uppercase tracking-wider">{hu.auth.usernameLabel}</label>
                 <input
                   type="text"
-                  placeholder="Pl. SakkMester99"
+                  placeholder={hu.auth.usernamePlaceholder}
                   value={usernameInput}
                   onChange={e => onUsernameChange(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && void onGuestLogin()}
@@ -121,11 +122,11 @@ export function AuthView({
                 ) : (
                   <User size={20} />
                 )}
-                {guestSigningIn ? 'Belépés…' : 'Játssz Vendégként (Anonim)'}
+                {guestSigningIn ? hu.auth.guestSigning : hu.auth.guestButton}
               </button>
               {isSupabaseConfigured && (
                 <p className="text-[10px] text-center text-[#a89078]/60 leading-relaxed">
-                  Vendégként is mentődnek a statisztikáid. Az Email tab-on véglegesítheted a fiókodat.
+                  {hu.auth.guestHint}
                 </p>
               )}
             </motion.div>
@@ -138,20 +139,20 @@ export function AuthView({
                 <div className="flex flex-col items-center gap-4 py-4 text-center">
                   <CheckCircle size={48} className="text-emerald-400" />
                   <div>
-                    <div className="font-bold text-emerald-400 text-lg">Email elküldve!</div>
-                    <div className="text-sm text-[#a89078] mt-1">Ellenőrizd a postaládádat és kattints a linkre a bejelentkezéshez.</div>
+                    <div className="font-bold text-emerald-400 text-lg">{hu.auth.emailSentTitle}</div>
+                    <div className="text-sm text-[#a89078] mt-1">{hu.auth.emailSentBody}</div>
                   </div>
                   <button onClick={() => { setSent(false); setEmail(''); }} className="text-xs text-[#a89078] hover:text-[#f0c866] underline transition-colors">
-                    Másik email használata
+                    {hu.auth.useOtherEmail}
                   </button>
                 </div>
               ) : (
                 <>
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs text-[#a89078] uppercase tracking-wider">Email-cím</label>
+                    <label className="text-xs text-[#a89078] uppercase tracking-wider">{hu.auth.emailLabel}</label>
                     <input
                       type="email"
-                      placeholder="pelda@email.com"
+                      placeholder={hu.auth.emailPlaceholder}
                       value={email}
                       onChange={e => { setEmail(e.target.value); setEmailError(''); }}
                       onKeyDown={e => e.key === 'Enter' && handleMagicLink()}
@@ -169,10 +170,10 @@ export function AuthView({
                     ) : (
                       <Send size={18} />
                     )}
-                    {sending ? 'Küldés...' : emailCooldownRemaining > 0 ? `Várj (${emailCooldownRemaining}s)` : 'Magic Link küldése'}
+                    {sending ? hu.auth.sending : emailCooldownRemaining > 0 ? hu.auth.magicWait(emailCooldownRemaining) : hu.auth.magicSend}
                   </button>
                   <p className="text-[10px] text-center text-[#a89078]/60 leading-relaxed">
-                    Emailben kapod a belépési linket — nincs szükség jelszóra. Meglévő és új fiókok esetén egyaránt működik. A szolgáltató korlátozza, hány levél mehet óránként; ne küldesd újra gyorsan többször.
+                    {hu.auth.magicHint}
                   </p>
                 </>
               )}
@@ -182,15 +183,15 @@ export function AuthView({
 
         {!isSupabaseConfigured && (
           <div className="text-xs text-center text-amber-500/80 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-            A Supabase nincs konfigurálva. A játék lokális módban indul.
+            {hu.auth.supabaseOff}
           </div>
         )}
 
         <div className="text-center text-xs text-[#a89078] flex flex-col gap-2">
-          <p>A játék használatával elfogadod a feltételeket.</p>
+          <p>{hu.auth.termsLead}</p>
           <div className="flex justify-center gap-4">
-            <button onClick={onTos} className="hover:text-[#f0c866] underline decoration-white/20 underline-offset-4 transition-colors">ÁSZF</button>
-            <button onClick={onPrivacy} className="hover:text-[#f0c866] underline decoration-white/20 underline-offset-4 transition-colors">Adatvédelem</button>
+            <button onClick={onTos} className="hover:text-[#f0c866] underline decoration-white/20 underline-offset-4 transition-colors">{hu.auth.tos}</button>
+            <button onClick={onPrivacy} className="hover:text-[#f0c866] underline decoration-white/20 underline-offset-4 transition-colors">{hu.auth.privacy}</button>
           </div>
         </div>
       </div>

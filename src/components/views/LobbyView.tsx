@@ -6,6 +6,7 @@ import { Profile } from '../../lib/supabase';
 import { countFilledOnlineSlots } from '../../lib/onlineLobby';
 import { teamsForOnlineLayout, type OnlineTeamLayoutId } from '../../game/logic';
 import { cn } from '../../lib/utils';
+import { hu } from '../../i18n/hu/ui';
 
 export const PLAYER_COLORS = ['#e74c3c', '#2c3e50', '#27ae60', '#8e44ad'] as const;
 export const PLAYER_LABELS = ['P1', 'P2', 'P3', 'P4'] as const;
@@ -52,13 +53,13 @@ function fmt(ms: number) {
 }
 
 function teamLayoutLabel(layout: OnlineTeamLayoutId, cap: number): string {
-  if (layout === 'ffa' || cap < 3) return 'Mindenki maga (FFA)';
+  if (layout === 'ffa' || cap < 3) return hu.lobby.teamFfa;
   if (cap === 3) {
-    if (layout === '3_1v2') return 'P1 egyedül vs P2+P3';
-    if (layout === '3_2v1') return 'P1+P2 vs P3 egyedül';
+    if (layout === '3_1v2') return hu.lobby.team3_1v2;
+    if (layout === '3_2v1') return hu.lobby.team3_2v1;
   }
-  if (cap === 4 && layout === '4_2v2') return 'P1+P2 vs P3+P4 (2–2)';
-  return 'Mindenki maga (FFA)';
+  if (cap === 4 && layout === '4_2v2') return hu.lobby.team4_2v2;
+  return hu.lobby.teamFfa;
 }
 
 export function LobbyView({
@@ -114,9 +115,9 @@ export function LobbyView({
             {displayName ?? '...'}
           </span>
         ) : isBot ? (
-          <span className="text-sm font-bold text-[#8e44ad] flex-1 flex items-center gap-1"><Bot size={14} /> Bot</span>
+          <span className="text-sm font-bold text-[#8e44ad] flex-1 flex items-center gap-1"><Bot size={14} /> {hu.common.bot}</span>
         ) : (
-          <span className="text-sm text-white/30 italic flex-1">Várakozás...</span>
+          <span className="text-sm text-white/30 italic flex-1">{hu.lobby.waitingEllipsis}</span>
         )}
         {isHost && slotIdx > 0 && !playerId && (
           isBot ? (
@@ -124,14 +125,14 @@ export function LobbyView({
               onClick={() => onToggleBot(slotIdx)}
               className="text-[10px] text-red-400 border border-red-400/30 rounded px-2 py-1 hover:bg-red-400/10 transition-colors flex items-center gap-1 uppercase tracking-wider"
             >
-              <X size={10} /> Eltávolít
+              <X size={10} /> {hu.lobby.removeBot}
             </button>
           ) : (
             <button
               onClick={() => onToggleBot(slotIdx)}
               className="text-[10px] text-[#8e44ad] border border-[#8e44ad]/40 rounded px-2 py-1 hover:bg-[#8e44ad]/10 transition-colors flex items-center gap-1 uppercase tracking-wider"
             >
-              <Bot size={10} /> Bot
+              <Bot size={10} /> {hu.common.bot}
             </button>
           )
         )}
@@ -154,11 +155,11 @@ export function LobbyView({
           </button>
           <div>
             <h2 className="font-['Cinzel',serif] text-2xl font-bold text-[#f0c866] tracking-widest uppercase">
-              Online Játékok
+              {hu.lobby.onlineGamesTitle}
             </h2>
             {mode === 'treasure-online' && (
               <div className="flex items-center gap-1 text-[#e8b830] text-xs mt-1 uppercase tracking-wider">
-                <Map size={12} /> Kincskereső mód
+                <Map size={12} /> {hu.lobby.treasureModeSubtitle}
               </div>
             )}
           </div>
@@ -169,11 +170,11 @@ export function LobbyView({
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm text-[#a89078] uppercase tracking-wider">
-                {isHost ? 'Saját játék' : 'Csatlakozva'}
+                {isHost ? hu.lobby.ownGame : hu.lobby.joined}
               </h3>
               {isHost && (
                 <span className={cn("text-sm font-mono font-bold", countdown < 30000 ? "text-red-400 animate-pulse" : "text-[#f0c866]")}>
-                  Auto-start: {fmt(countdown)}
+                  {hu.lobby.autoStart(fmt(countdown))}
                 </span>
               )}
             </div>
@@ -198,15 +199,15 @@ export function LobbyView({
 
             {lobbyCap >= 3 && (
               <div className="rounded-lg border border-white/10 bg-[#241810]/80 p-3 space-y-2">
-                <div className="text-[10px] text-[#a89078] uppercase tracking-wider">Csapat mód (online)</div>
+                <div className="text-[10px] text-[#a89078] uppercase tracking-wider">{hu.lobby.teamModeLabel}</div>
                 {isHost ? (
                   <div className="flex flex-col gap-2">
                     {lobbyCap === 3 && (
                       <div className="flex flex-wrap gap-2">
                         {([
-                          { id: 'ffa' as const, label: 'FFA' },
-                          { id: '3_1v2' as const, label: '1+2 (P1 vs P2+P3)' },
-                          { id: '3_2v1' as const, label: '2+1 (P1+P2 vs P3)' },
+                          { id: 'ffa' as const, label: hu.lobby.pickerFfa },
+                          { id: '3_1v2' as const, label: hu.lobby.picker3_1v2 },
+                          { id: '3_2v1' as const, label: hu.lobby.picker3_2v1 },
                         ]).map(opt => (
                           <button
                             key={opt.id}
@@ -227,8 +228,8 @@ export function LobbyView({
                     {lobbyCap === 4 && (
                       <div className="flex flex-wrap gap-2">
                         {([
-                          { id: 'ffa' as const, label: 'FFA' },
-                          { id: '4_2v2' as const, label: '2–2 (P1+P2 vs P3+P4)' },
+                          { id: 'ffa' as const, label: hu.lobby.pickerFfa },
+                          { id: '4_2v2' as const, label: hu.lobby.picker4_2v2 },
                         ]).map(opt => (
                           <button
                             key={opt.id}
@@ -251,7 +252,7 @@ export function LobbyView({
                   <p className="text-xs text-[#c8b090]">{teamLayoutLabel(effectiveTeamLayout, lobbyCap)}</p>
                 )}
                 <p className="text-[10px] text-[#a89078]/80 leading-relaxed">
-                  Győzelem: ha a csapatod bármelyik tagja eléri a saját célját, mindannyian nyertesként számítotok (XP).
+                  {hu.lobby.teamVictoryHint}
                 </p>
               </div>
             )}
@@ -268,17 +269,17 @@ export function LobbyView({
                 )}
               >
                 <Play size={18} />
-                {canStart ? 'Játék Indítása' : `Legalább 2 játékos szükséges (${filledSlots}/${lobbyCap})`}
+                {canStart ? hu.lobby.startGame : hu.lobby.needTwoPlayers(filledSlots, lobbyCap)}
               </button>
             )}
             {isHost && canStart && filledSlots < lobbyCap && (
               <p className="text-center text-[10px] text-amber-400/90 leading-relaxed px-1">
-                A meccs csak a kitöltött helyekkel indul ({filledSlots} játékos) — üres slot nem kap bábut a táblán.
+                {hu.lobby.partialStartHint(filledSlots)}
               </p>
             )}
             {!isHost && (
               <div className="text-center py-4 text-[#a89078] text-sm">
-                Várakozás a host indítására...
+                {hu.lobby.waitForHost}
               </div>
             )}
           </div>
@@ -288,7 +289,7 @@ export function LobbyView({
             {/* Player count selector */}
             <div>
               <div className="text-xs text-[#a89078] uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Users size={12} /> Játékosok száma
+                <Users size={12} /> {hu.lobby.playerCountHeading}
               </div>
               <div className="flex gap-2">
                 {[2, 3, 4].map(n => (
@@ -302,14 +303,14 @@ export function LobbyView({
                         : "bg-[#241810] text-[#a89078] border-white/10 hover:border-[#f0c866] hover:text-[#f0c866]"
                     )}
                   >
-                    {n} Játékos
+                    {hu.lobby.nPlayers(n)}
                   </button>
                 ))}
               </div>
               {maxPlayers >= 3 && (
                 <div className="mt-2 text-[10px] text-[#a89078]/70 leading-relaxed">
-                  {maxPlayers === 3 && '3 játékos: P1↕ P2↕ P3↔ · 7 fal/fő'}
-                  {maxPlayers === 4 && '4 játékos: P1↕ P2↕ P3↔ P4↔ · 5 fal/fő'}
+                  {maxPlayers === 3 && hu.lobby.layoutLegend3}
+                  {maxPlayers === 4 && hu.lobby.layoutLegend4}
                 </div>
               )}
             </div>
@@ -318,16 +319,16 @@ export function LobbyView({
               onClick={onCreateGame}
               className="w-full bg-[#f0c866] text-[#1a0f08] font-bold py-4 px-6 rounded-lg uppercase tracking-wider hover:bg-[#f4d488] transition-colors"
             >
-              Új Játék Létrehozása
+              {hu.lobby.createNewGame}
             </button>
 
             <div className="h-px bg-white/10 w-full" />
 
             <div>
-              <h3 className="text-sm text-[#a89078] uppercase tracking-wider mb-4">Várakozó Játékosok</h3>
+              <h3 className="text-sm text-[#a89078] uppercase tracking-wider mb-4">{hu.lobby.waitingPlayers}</h3>
               {activeGames.length === 0 ? (
                 <div className="text-center py-8 text-white/40 italic">
-                  Jelenleg nincs várakozó játékos ebben a módban.
+                  {hu.lobby.noWaitingGames}
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
@@ -343,27 +344,27 @@ export function LobbyView({
                             <User size={14} className="text-[#f0c866]" />
                           </div>
                           <div>
-                            <span className="font-bold tracking-wider">{g.player1?.username || 'Ismeretlen'}</span>
+                            <span className="font-bold tracking-wider">{g.player1?.username || hu.common.unknown}</span>
                             <div className="flex items-center gap-2 mt-0.5">
                               {g.state?.treasureMode && (
                                 <span className="flex items-center gap-1 text-[#e8b830] text-[10px] uppercase tracking-wider">
-                                  <Map size={10} /> Kincs
+                                  <Map size={10} /> {hu.lobby.treasureBadge}
                                 </span>
                               )}
-                              <span className="text-[10px] text-[#a89078]">{filled}/{max} játékos</span>
+                              <span className="text-[10px] text-[#a89078]">{hu.lobby.playersCount(filled, max)}</span>
                             </div>
                           </div>
                         </div>
                         {g.player1_id === sessionUserId ? (
-                          <span className="text-xs text-[#a89078] uppercase tracking-wider px-4 py-2">Saját</span>
+                          <span className="text-xs text-[#a89078] uppercase tracking-wider px-4 py-2">{hu.lobby.own}</span>
                         ) : isFull ? (
-                          <span className="text-xs text-white/30 uppercase tracking-wider px-4 py-2">Teli</span>
+                          <span className="text-xs text-white/30 uppercase tracking-wider px-4 py-2">{hu.lobby.full}</span>
                         ) : (
                           <button
                             onClick={() => onJoinGame(g.id, g.state, g.player1_id, nextSlot)}
                             className="bg-transparent border border-[#f0c866]/50 text-[#f0c866] px-4 py-2 rounded hover:bg-[#f0c866]/10 transition-colors text-sm uppercase tracking-wider"
                           >
-                            Csatlakozás
+                            {hu.lobby.join}
                           </button>
                         )}
                       </div>
