@@ -2,9 +2,38 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
+A **2026-04-04**-i változások (**0.6.0**) élesben futnak (Vercel + Supabase).
+
 ---
 
-## [Unreleased] — 2026-04-04 (patch 6)
+## [Unreleased]
+
+_(Még nincs közzétett változás a következő verzióhoz.)_
+
+---
+
+## [0.6.0] — 2026-04-04
+
+### Patch 7 — i18n, progression, kincs
+
+### Added — i18n (magyar UI)
+- Központi szövegek: **`src/i18n/hu/ui.ts`** (`hu.common`, `menu`, `auth`, `app`, `game`, `skills`, `leaderboard`, `lobby`, `store`, `collectibles`, `sessionWarning`, `easter`).
+- Hosszú tartalom: **`src/i18n/hu/RulesBody.tsx`**, **`LegalBodies.tsx`** (ÁSZF / adatvédelmi törzs); **`src/i18n/index.ts`** re-export.
+- Nézetek **`hu`**-ra kötve: `App`, `AuthView`, `MenuView`, `LobbyView`, `GameView`, `LeaderboardView`, `StoreView`, `LegalDocs`, `Rules`, `SessionWarning` (részben), `EasterEggFloater`.
+
+### Changed — Áruház / progression (egyszer használatos skillek)
+- **Megvásárolt skill** kincsmódban **egy sikeres használat után** kikerül az **`owned_skills`** és a **`skill_loadout`** listából (profil + lokális tároló); **újra megvehető** a boltban.
+- Csak akkor fut a profilfrissítés, ha a skill **benne volt** az `owned_skills`-ban (tisztán **ásással** szerzett skill nem érinti a birtoklást).
+- **`persistConsumedPurchasedSkill`** (`supabase.ts`) — Supabase `profiles` update + lokális `quoridor_owned_skills` / `quoridor_skill_loadout`.
+
+### Changed — Kincs / inventory
+- **Ásás** nem indul, ha **tele** a készlet a szint szerinti plafonig (**&lt; 5. szint: 2**, **≥ 5: 3** — megegyezik a Gamepass loadout férőhellyel); üzenet: `digInventoryFull`.
+- **Ásás** csak olyan skillt ad, ami **még nincs** a készleten (típusonként max. egy); ha nincs új típus, a kincs **nem** tűnik el feleslegesen — `digDuplicateTypes`.
+
+### Changed — Dokumentáció
+- **Szabályok** (`RulesBody`): megvásárolt skill = egy felhasználás, újravásárlás; típusonként egy példány; loadout csak „épp birtokolt” skillekből.
+
+### Patch 6 — online multiplayer, MOLE, email cooldown
 
 ### Fixed — Online multiplayer / menü
 - **Meccs vége** — `resetOnlineSessionAfterMatch` törli az `onlineGameId`-t, `hostedGameData`-t, `botSlots`-ot és `rejoinCandidate`-et győzelemkor; az **„Újra”** gomb nem akad el a „Már bent vagy egy online játékban!” üzeneten, és a menü nem mutat tévesen folyamatban lévő meccset.
@@ -27,9 +56,7 @@ All notable changes to Quoridor Falsakk are documented here.
 ### Fixed — Online lobby (indítás)
 - **Kitöltött helyek** — a meccs indulásakor a bábuk száma a ténylegesen foglalt slotok + botok alapján készül (`countFilledOnlineSlots`, `filterBotSlotsForPlayerCount`); `updateGameState` frissíti a **`max_players`** értékét; üres slot nem kap „szellem” bábut (pl. 3 fős lobby, csak 2 ember).
 
----
-
-## [Unreleased] — 2026-04-04 (patch 5)
+### Patch 5 — skillek 2–4 játékos, szabályok / UI
 
 ### Changed — Skillek 2–4 játékosra
 - **SKIP (Átugrás)** — a **`(turn + 1) % n`** játékos kapja a kihagyott kört (körrend szerinti következő), nem egy fix „P0 ellenfél” index.
@@ -47,9 +74,7 @@ All notable changes to Quoridor Falsakk are documented here.
 ### Added — Tests
 - **`applySkill`** egységtesztek: SKIP 2p és 4p, SWAP seeded `rng`, MAGNET több ellenfél és ütközés-elutasítás.
 
----
-
-## [Unreleased] — 2026-04-04 (patch 4)
+### Patch 4 — Supabase security, Vitest
 
 ### Security (Supabase)
 - **`profiles_peer` nézet** — publikus oszlopok (id, username, xp, wins, losses, level, created_at); **fingerprint / egg_wallet / owned_skills / skill_loadout / collected_items** nem látszanak listázásnál vagy más játékos lekérésénél.
@@ -63,9 +88,7 @@ All notable changes to Quoridor Falsakk are documented here.
 - Tesztek: `profileAccess`, `formatGuestAuthError`, `calculateLevel`, `easterEggRoll` (határértékek + eloszlás), `joinGame` RPC szerződés (`vi.spyOn`), játék `logic` (hasWon, initState, v2w, isBlocked), dokumentációs security invariant lista.
 - **`rollEggAt`** kivonva `easterEggRoll.ts`-be a determinisztikus tesztekhez.
 
----
-
-## [Unreleased] — 2026-04-04 (patch 3)
+### Patch 3 — Easter spawn, vendég auth, migrációk
 
 ### Changed
 - **Easter egg spawn** — legalább **28 s** valós idő két spawn-kísérlet között (`MIN_MS_BETWEEN_SPAWN_ATTEMPTS` a `useEasterEggSpawner`-ben); korábban minden kör váltáskor dobott, gyors játékban túl sűrűn jelent meg tojás. Kilépés a játékból nullázza a számlálót.
@@ -76,9 +99,7 @@ All notable changes to Quoridor Falsakk are documented here.
 - **Supabase migrációk** — fájlnevek egyedi időbélyegre (`20260404120010` … `20260404120060`), hogy a `schema_migrations` ne írjon ütköző `20260404` verziót; `migration repair` + `db push` a távoli DB-re.
 - **`handle_new_user` trigger** — ha a felhasználónév-ütközés ciklusa nem oldódik, **`Játékos_` + UUID (kötőjel nélkül)** garantált egyedi név; csökkenti az anonim signup 500-as auth hibát.
 
----
-
-## [Unreleased] — 2026-04-04 (patch 2)
+### Patch 2 — code review (12 bugfix)
 
 ### Fixed — Code Review (12 bug)
 - **Winner display** — win modal mostantól `winnerIdx` state-t használ, nem `gameState.turn`-t; a turn előre léphetett mire a modal renderelt
@@ -94,9 +115,7 @@ All notable changes to Quoridor Falsakk are documented here.
 - **EasterEggFloater `timeLeft` negatív** — `Math.max(0, p - 1)` hogy ne menjen 0 alá; `egg.type` hozzáadva dep-be a reset miatt
 - **`botSlotsRef` és `skillLoadoutRef`** — két új ref hozzáadva az összes kapcsolódó stale closure megelőzéséhez
 
----
-
-## [Unreleased] — 2026-04-04 (patch 1)
+### Patch 1 — Áruház, Easter egg, profil, magic link, DB
 
 ### Added
 - **Gamepass & Áruház** (`StoreView`) — új nézet 3 tabbal:
@@ -158,11 +177,9 @@ END;
 $$;
 ```
 
----
+### Multiplayer 3–4 fő, botok, heartbeat, rejoin (2026-04-04)
 
-## [Unreleased] — 2026-04-04
-
-### Added
+#### Added
 - **3–4 player multiplayer** — host selects 2/3/4 players in lobby; P3 moves left→right, P4 right→left; each player gets their own color (red/dark blue/green/purple)
 - **AI bots in multiplayer lobby** — host can fill any empty slot with a bot; bots use `greedyBotMove` (BFS-based greedy, works for any player index); bots are driven by the host's client and synced via Supabase Realtime
 - **Manual start + 2-minute auto-start** — host can start when ≥2 slots are filled; auto-start fires after 2 minutes
@@ -182,7 +199,7 @@ $$;
 - **Skill icon buttons with tooltips** — each skill rendered as a 56×56 icon button with unique Lucide icon, per-skill accent colour, active glow when in targeting mode, and animated hover tooltip (skill name + Hungarian description); opponent skills shown as lock icon + `???`
 - **Lobby player names** — slot rows now show the joining player's actual username in their player colour; `lobbySlotNames` fetched on every `hostedGameData` change; own slot resolved from local profile without extra DB call
 
-### Fixed
+#### Fixed
 - `cloneS` now preserves `botPlayers` field (was silently dropped, causing bots to stop after first move)
 - `mmRoot` replaced with `greedyBotMove(s, pi)` for bot moves — `mmRoot` was hardcoded for player index 1; new function works for any player index
 - `executeMove` and `executeSkill` win checks now use `hasWon(p)` to support `goalCol` players (P3/P4)
@@ -196,12 +213,12 @@ $$;
 - **API heartbeat/cleanup silently failing** — all three Vercel API files used `VITE_SUPABASE_ANON_KEY` which cannot bypass RLS; switched to `SUPABASE_SERVICE_ROLE_KEY` (with `VITE_` prefix fallback)
 - **pg_cron failing since setup** — `games_status_check` constraint only allowed `waiting | playing | finished`; `abandoned` and `cancelled` were missing; every cron run errored; fixed by dropping and recreating the constraint with all 5 valid statuses
 
-### Changed
+#### Changed
 - Vercel cron removed (Hobby plan limit); cleanup handled by heartbeat piggyback + Supabase pg_cron instead
 - `initState(treasureMode, playerCount)` — player starting positions and wall counts scale with player count
 - API files use `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_URL` env var names (with `VITE_` fallback) — add both to Vercel dashboard
 
-### DB migrations required
+#### DB migrations required
 ```sql
 alter table games add column if not exists max_players integer default 2;
 alter table games add column if not exists player3_id uuid references auth.users(id);
