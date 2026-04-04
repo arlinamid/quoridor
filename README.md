@@ -1,7 +1,7 @@
 # Quoridor Falsakk — A Stratégia Játéka
 
 A Quoridor board game web-alapú implementációja React + Supabase stack-kel.
-Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI botok, és egy kincskeresős skill-rendszer.
+Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI botok, kincskeresős skill-rendszer, és Easter egg Gamepass áruház.
 
 **Live:** https://quoridor-snowy.vercel.app
 
@@ -59,15 +59,18 @@ src/
     ThreeBackground.tsx      # Three.js 3D háttér
     Rules.tsx                # Szabályok oldal
     LegalDocs.tsx            # ÁSZF és Adatvédelem
+    EasterEggOverlay.tsx     # Floating egg spawn + useEasterEggSpawner hook
+    SessionWarning.tsx       # Húsvéti esemény banner (ápr. 4–8.)
     views/
-      AuthView.tsx           # Bejelentkezési képernyő
-      MenuView.tsx           # Lépcsőzetes főmenü
+      AuthView.tsx           # Bejelentkezési képernyő (vendég + magic link tab)
+      MenuView.tsx           # Lépcsőzetes főmenü (+ Áruház gomb)
       LobbyView.tsx          # Online lobby (2–4 játékos, bot slot-ok)
-      GameView.tsx           # Játékfelület (dinamikus 2–4 játékos panel)
-      LeaderboardView.tsx    # Statisztikák és ranglista
+      GameView.tsx           # Játékfelület (dinamikus 2–4 játékos panel, Easter egg overlay)
+      LeaderboardView.tsx    # Statisztikák, ranglista, profil szerkesztés, fiók upgrade
+      StoreView.tsx          # Gamepass áruház (Bolt / Loadout / Gyűjtemény tab)
   lib/
-    supabase.ts              # Supabase kliens, auth, DB, Edge Function hívások
-    types.ts                 # Megosztott típusok (GameMode, View, predikátumok)
+    supabase.ts              # Supabase kliens, auth, DB, RPC hívások, egg wallet
+    types.ts                 # Megosztott típusok (GameMode, View, CollectibleType, COLLECTIBLE_META)
     fingerprint.ts           # Eszközazonosítás visszatérő játékosokhoz
     utils.ts                 # cn() segédfüggvény
 
@@ -144,7 +147,12 @@ create table profiles (
   losses integer default 0,
   level integer default 1,
   fingerprint text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  -- Gamepass & Store (migration szükséges ha meglévő tábla)
+  collected_items jsonb default '[]',
+  skill_loadout   text[],
+  egg_wallet      jsonb default '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}',
+  owned_skills    text[] default '{}'
 );
 
 -- games
@@ -155,7 +163,7 @@ create table games (
   player3_id uuid references profiles(id),
   player4_id uuid references profiles(id),
   state jsonb,
-  status text default 'waiting',   -- waiting | playing | finished | abandoned
+  status text default 'waiting',   -- waiting | playing | finished | abandoned | cancelled
   winner_id uuid references profiles(id),
   max_players integer default 2,
   last_heartbeat timestamptz default now(),
@@ -166,10 +174,50 @@ create table games (
 ### Migrációk (ha meglévő táblák frissítése szükséges)
 
 ```sql
+-- games tábla bővítések
 alter table games add column if not exists max_players integer default 2;
 alter table games add column if not exists player3_id uuid references auth.users(id);
 alter table games add column if not exists player4_id uuid references auth.users(id);
 alter table games add column if not exists last_heartbeat timestamptz default now();
+
+-- profiles tábla — Gamepass & Store
+alter table profiles add column if not exists collected_items jsonb default '[]'::jsonb;
+alter table profiles add column if not exists skill_loadout text[] default null;
+alter table profiles add column if not exists egg_wallet jsonb default '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb;
+alter table profiles add column if not exists owned_skills text[] default '{}'::text[];
+```
+
+### Store RPC függvények
+
+```sql
+-- Tojás hozzáadása a tárcához (játék közben)
+create or replace function add_egg_to_wallet(p_user_id uuid, p_egg_type text, p_amount int default 1)
+returns void language sql security definer as $$
+  update profiles set
+    egg_wallet = jsonb_set(coalesce(egg_wallet,'{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb),
+      array[p_egg_type], to_jsonb(coalesce((egg_wallet ->> p_egg_type)::int, 0) + p_amount)),
+    collected_items = coalesce(collected_items,'[]'::jsonb) ||
+      jsonb_build_object('type', p_egg_type, 'collectedAt', now()::text)::jsonb
+  where id = p_user_id;
+$$;
+
+-- Skill vásárlás tojásokkal (áruházban)
+create or replace function purchase_skill_with_eggs(
+  p_user_id uuid, p_skill text, p_egg_type text, p_egg_cost int
+) returns text language plpgsql security definer as $$
+declare current_wallet jsonb; current_bal int;
+begin
+  select egg_wallet into current_wallet from profiles where id = p_user_id for update;
+  if exists (select 1 from profiles where id = p_user_id and p_skill = any(owned_skills)) then return 'already_owned'; end if;
+  current_bal := coalesce((current_wallet ->> p_egg_type)::int, 0);
+  if current_bal < p_egg_cost then return 'insufficient'; end if;
+  update profiles set
+    egg_wallet   = jsonb_set(egg_wallet, array[p_egg_type], to_jsonb(current_bal - p_egg_cost)),
+    owned_skills = array_append(owned_skills, p_skill)
+  where id = p_user_id;
+  return 'ok';
+end;
+$$;
 ```
 
 ### Status constraint (kötelező migráció)
@@ -254,6 +302,39 @@ Minden skill egy 56×56 px-es ikon gombként jelenik meg, játékos-specifikus a
 - Ranglista: top 10 játékos XP szerint
 - Eszközazonosítás: visszatérő játékosok automatikus felismerése fingerprint alapján
 - Lokális fallback: Supabase nélkül is működik localStorage-ban
+
+---
+
+## Gamepass & Áruház
+
+```
+Játék közben → Easter egg spawn (véletlenszerű) → kattintás → egg_wallet nő
+Áruház → Bolt tab → skill kártya + tojás ár → Megvétel → owned_skills frissül
+Áruház → Loadout tab → max 2 skill (3 Gamepass-szel, Lvl 5+) → mentés
+Játék indul → loadout skilljeivel kezd a P0 / saját slot (online)
+```
+
+### Easter egg ritkasági szintek
+
+| Tojás | Húsvéti esemény (ápr. 4–8.) | Normál | Érték |
+|-------|--------------------------|--------|-------|
+| 🥚 Alap (EGG_BASIC) | 4% / kör | 0.3% | Közönséges skillekhez |
+| 🌟 Arany (EGG_GOLD) | 1.5% / kör | 0.15% | Ritka skillekhez |
+| 🌈 Szivárvány (EGG_RAINBOW) | 0.5% / kör | 0.05% | Legendás skillekhez |
+
+### Skill árak
+
+| Tier | Skillek | Ár |
+|------|---------|-----|
+| Alap | Extra Falak (2×🥚), Kalapács (3×🥚), Átugrás (4×🥚) | Alap tojás |
+| Arany | Pajzs (1×🌟), Vakond/Teleport (2×🌟), Mágnes/Csapda (3×🌟) | Arany tojás |
+| Legendás | Dinamit (1×🌈), Csere (2×🌈) | Szivárvány tojás |
+
+### Gamepass
+
+Szint 5+ automatikusan feloldja a Gamepass-t:
+- 3. loadout képességhely (alapból 2)
+- (jövőben bővíthető előnyök)
 
 ---
 

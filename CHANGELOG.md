@@ -4,6 +4,88 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ---
 
+## [Unreleased] — 2026-04-04 (patch 2)
+
+### Fixed — Code Review (12 bug)
+- **Winner display** — win modal mostantól `winnerIdx` state-t használ, nem `gameState.turn`-t; a turn előre léphetett mire a modal renderelt
+- **Online 3–4 player winner** — a nyertes slotját `winner_id` → player1–4_id lookup alapján határozza meg; korábban csak P0/P1 esetén volt helyes
+- **Csapda teleport P2/P3** — `PLAYER_START` tömb definiálja a helyes start pozíciót (`{r:4,c:0}` és `{r:4,c:8}`); korábban mindenki az r=0 vagy r=8 pozícióba ugrott
+- **`handleWin` stale closure** — `executeMove` és `executeSkill` mostantól `handleWinRef.current()` hívja a `handleWin` callbacket; eltávolítva a `useCallback` deps-ből
+- **SWAP/MAGNET csapda check** — `oppIdx = 1 - Math.min(turn, 1)` egyező a `applySkill` logikájával; `1 - prev.turn` 3–4 player esetén `-1`/`-2` indexet adott
+- **`disconnectTimerRef` leak** — realtime subscription cleanup mostantól `clearTimeout`-ot hív a timer törlésére; korábban a timer a subscription eltávolítása után is futott
+- **Auto-start timer stale closure** — `botSlotsRef.current` és `gameStateRef.current` olvasva közvetlenül, nem a closure-ból rögzített értékek
+- **Online joiner skill loadout** — `skillLoadoutRef.current` alkalmazza a saját loadout-ot a saját player slotjára a realtime `'playing'` eseménynél; korábban a host state-je üres inventoryval érkezett
+- **`startGame` stale loadout** — `skillLoadoutRef.current`-t olvas a closure-ba rögzített `skillLoadout` helyett; `onlineGameId` hozzáadva deps-be
+- **Easter egg collect hiba** — `collectEasterEgg` hívás `try/catch`-be csomagolva; korábban a hálózati hiba crashelhette a játékot
+- **EasterEggFloater `timeLeft` negatív** — `Math.max(0, p - 1)` hogy ne menjen 0 alá; `egg.type` hozzáadva dep-be a reset miatt
+- **`botSlotsRef` és `skillLoadoutRef`** — két új ref hozzáadva az összes kapcsolódó stale closure megelőzéséhez
+
+---
+
+## [Unreleased] — 2026-04-04 (patch 1)
+
+### Added
+- **Gamepass & Áruház** (`StoreView`) — új nézet 3 tabbal:
+  - **Bolt**: mind a 10 skill kártyán; Easter egg-ekkel vásárolható (nem XP); ár tier szerint: Alap/Arany/Szivárvány tojás; „Megvétel" gomb, egyenleg ellenőrzéssel
+  - **Loadout**: saját (megvásárolt) skillekből max 2 aktív (3 Gamepass-szel, azaz Lvl 5+); játék indulásakor ezek kerülnek az inventory-ba
+  - **Gyűjtemény**: tojás egyenleg összesítő, megvásárolt skill lista, gyűjtési előzmények (dátum + ritkasági szint)
+- **Easter Egg rendszer** — játék közben (nem kezdéskor) véletlenszerűen megjelenik egy animált tojás; 8 mp-ig kattintható; kattintásra `egg_wallet` nő; 3 ritkasági fokozat: 🥚 Alap / 🌟 Arany / 🌈 Szivárvány
+- **Easter esemény** (2026. ápr. 4–8.) — tojás spawn ráta 6–12× magasabb; `SessionWarning` banner jelenik meg; banner bezárható, localStorage-ban menti (`DISMISS_KEY`)
+- **Skill loadout játékindulásnál** — `initState(treasureMode, playerCount, loadout?)` harmadik paraméter; P0 inventory-ja a kiválasztott loadout-tal tölt fel; online játékosnál saját slotja is frissítve a realtime game start eseménynél
+- **Branded email sablonok** — `/supabase/email-templates/` könyvtár:
+  - `magic-link.html` — sötét téma, arany gomb, ⚡ ikon, 10 perces érvényesség
+  - `confirm-email-change.html` — zöld gomb, 🛡️ ikon, megmaradó adatok listája, 1 órás érvényesség
+- **Részletes profil & vendég → regisztrált upgrade** — `LeaderboardView` kibővítve: szerkeszthető felhasználónév, fiók típus badge (Vendég / Regisztrált), 4 statisztika kártya, XP progress bar, email upgrade szekció magic link-kel
+- **Magic link bejelentkezés** — `AuthView` email tab: OTP küldés, success állapot, „Másik email" reset; `signInWithMagicLink()` → Supabase `signInWithOtp`
+- **Cross-browser email konfirmáció szinkron** — `USER_UPDATED` event kezelése `onAuthStateChange`-ben; „Már megerősítettem" gomb `refreshSession()` hívással; sikeres eredmény esetén badge automatikusan frissül
+- **Tojás valuta rendszer** — `egg_wallet` JSONB oszlop (spendable egyenleg típusonként); `owned_skills` TEXT[] (megvásárolt skillек); `purchased_skill_with_eggs()` RPC (atomi egyenleg ellenőrzés + levonás + skill hozzáadás); `add_egg_to_wallet()` RPC (egyenleg növelés + history append)
+
+### Fixed
+- **RLS UPDATE P3/P4** — `games_update_player` policy kiegészítve `player3_id` és `player4_id` oszlopokkal; korábban P3/P4 néma hibával nem tudta frissíteni a játékállapotot
+- **pg_cron CHECK constraint** — `games_status_check` újraalkotva mind az 5 státusszal (`waiting|playing|finished|abandoned|cancelled`); korábban az `abandoned` és `cancelled` hiányzott, minden cron futás hibázott
+- **Cross-browser session** — `onAuthStateChange` `USER_UPDATED` event most mutatja az email megerősítési visszajelzést; a másik böngészőből a `refreshSession()` gomb frissít
+
+### DB migrations szükséges
+```sql
+-- Store funkciók (egg_wallet, owned_skills, collected_items, skill_loadout)
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS collected_items JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS skill_loadout   TEXT[] DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS egg_wallet      JSONB  DEFAULT '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb,
+  ADD COLUMN IF NOT EXISTS owned_skills    TEXT[] DEFAULT '{}'::text[];
+
+-- RPC: tojás hozzáadása a tárcához
+CREATE OR REPLACE FUNCTION add_egg_to_wallet(p_user_id UUID, p_egg_type TEXT, p_amount INT DEFAULT 1)
+RETURNS void LANGUAGE sql SECURITY DEFINER AS $$
+  UPDATE profiles SET
+    egg_wallet = jsonb_set(COALESCE(egg_wallet,'{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb),
+      ARRAY[p_egg_type], to_jsonb(COALESCE((egg_wallet ->> p_egg_type)::int, 0) + p_amount)),
+    collected_items = COALESCE(collected_items,'[]'::jsonb) ||
+      jsonb_build_object('type', p_egg_type, 'collectedAt', now()::text)::jsonb
+  WHERE id = p_user_id;
+$$;
+
+-- RPC: skill vásárlás tojásokkal
+CREATE OR REPLACE FUNCTION purchase_skill_with_eggs(
+  p_user_id UUID, p_skill TEXT, p_egg_type TEXT, p_egg_cost INT
+) RETURNS TEXT LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE current_wallet JSONB; current_bal INT;
+BEGIN
+  SELECT egg_wallet INTO current_wallet FROM profiles WHERE id = p_user_id FOR UPDATE;
+  IF EXISTS (SELECT 1 FROM profiles WHERE id = p_user_id AND p_skill = ANY(owned_skills)) THEN RETURN 'already_owned'; END IF;
+  current_bal := COALESCE((current_wallet ->> p_egg_type)::int, 0);
+  IF current_bal < p_egg_cost THEN RETURN 'insufficient'; END IF;
+  UPDATE profiles SET
+    egg_wallet   = jsonb_set(egg_wallet, ARRAY[p_egg_type], to_jsonb(current_bal - p_egg_cost)),
+    owned_skills = array_append(owned_skills, p_skill)
+  WHERE id = p_user_id;
+  RETURN 'ok';
+END;
+$$;
+```
+
+---
+
 ## [Unreleased] — 2026-04-04
 
 ### Added
