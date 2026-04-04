@@ -13,8 +13,8 @@ import { Rules } from './components/Rules';
 import { StoreView } from './components/views/StoreView';
 import { SessionWarning } from './components/SessionWarning';
 import { useEasterEggSpawner } from './components/EasterEggOverlay';
-import { CollectedItem } from './lib/types';
-import { saveSkillLoadout, addCollectedItem, getLocalSkillLoadout, getLocalCollectedItems } from './lib/supabase';
+import { CollectibleType } from './lib/types';
+import { saveSkillLoadout, collectEasterEgg, purchaseSkill, getLocalSkillLoadout } from './lib/supabase';
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { GameMode, View, isOnlineMode, isTreasureMode, isAIMode } from './lib/types';
@@ -412,21 +412,31 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view]); // deps: view only — everything else via refs
 
-  const handleEasterEggCollect = useCallback(async (item: CollectedItem) => {
-    if (session?.user?.id && isSupabaseConfigured) {
-      await addCollectedItem(session.user.id, item);
+  const handleEasterEggCollect = useCallback(async (eggType: CollectibleType) => {
+    const { egg_wallet, collected_items } = await collectEasterEgg(
+      session?.user?.id ?? null,
+      eggType
+    );
+    setProfile(p => ({ ...p, egg_wallet, collected_items }));
+    const label = eggType === 'EGG_RAINBOW' ? '🌈 Szivárvány Tojás' : eggType === 'EGG_GOLD' ? '🌟 Arany Tojás' : '🥚 Húsvéti Tojás';
+    setStatusMsg(`${label} gyűjtve! Egyenleg: ${egg_wallet[eggType]} db`);
+    setTimeout(() => setStatusMsg(''), 3000);
+  }, [session]);
+
+  const handlePurchaseSkill = useCallback(async (
+    skill: SkillType,
+    eggType: CollectibleType,
+    cost: number
+  ): Promise<'ok' | 'insufficient' | 'already_owned' | 'error'> => {
+    const res = await purchaseSkill(session?.user?.id ?? null, skill, eggType, cost);
+    if (res.result === 'ok') {
       setProfile(p => ({
         ...p,
-        collected_items: [...(p.collected_items ?? []), item],
+        ...(res.egg_wallet  ? { egg_wallet: res.egg_wallet }   : {}),
+        ...(res.owned_skills ? { owned_skills: res.owned_skills } : {}),
       }));
-    } else {
-      // localStorage fallback
-      const items = getLocalCollectedItems();
-      items.push(item);
-      localStorage.setItem('quoridor_collected_items', JSON.stringify(items));
     }
-    setStatusMsg(`🥚 Easter egg gyűjtve: ${item.type === 'EGG_RAINBOW' ? '🌈 Szivárvány Tojás' : item.type === 'EGG_GOLD' ? '🌟 Arany Tojás' : '🥚 Húsvéti Tojás'}!`);
-    setTimeout(() => setStatusMsg(''), 3000);
+    return res.result;
   }, [session]);
 
   const { activeEgg, trySpawn, collect } = useEasterEggSpawner(
@@ -706,6 +716,7 @@ export default function App() {
               profile={profile}
               onBack={() => setView('menu')}
               onSaveLoadout={handleSaveLoadout}
+              onPurchaseSkill={handlePurchaseSkill}
             />
           )}
         </AnimatePresence>

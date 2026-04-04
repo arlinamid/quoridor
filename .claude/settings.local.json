@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
+      "Bash(GIT_EDITOR=true git rebase --continue)",
+      "Bash(npx supabase:*)",
+      "Bash(node -e \"const {version} = require\\(''./node_modules/lucide-react/package.json''\\); console.log\\(version\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(npx tsc:*)",
+      "Bash(git stash:*)",
+      "Bash(dir \"D:\\\\tool\\\\quoridor\\\\supabase\\\\migrations\" /b)"
+    ]
+  }
+}

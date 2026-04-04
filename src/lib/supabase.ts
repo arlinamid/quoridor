@@ -10,6 +10,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-k
 export const isSupabaseConfigured = supabaseUrl !== 'https://placeholder-project.supabase.co';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export type EggWallet = { EGG_BASIC: number; EGG_GOLD: number; EGG_RAINBOW: number };
+
 export type Profile = {
   id: string;
   username: string;
@@ -19,6 +21,8 @@ export type Profile = {
   level: number;
   collected_items?: import('./types').CollectedItem[];
   skill_loadout?: import('../game/logic').SkillType[] | null;
+  owned_skills?: import('../game/logic').SkillType[];
+  egg_wallet?: EggWallet;
 };
 
 // Local storage fallback for gamification if Supabase is not configured
@@ -169,38 +173,115 @@ export const updateGameState = async (gameId: string, state: any, status: string
   await supabase.from('games').update(payload).eq('id', gameId);
 };
 
-/** Add a collected Easter egg or item to the user's profile. */
-export const addCollectedItem = async (userId: string, item: import('./types').CollectedItem) => {
-  if (!isSupabaseConfigured) {
+// ── Egg wallet + owned skills helpers ───────────────────────────────────────
+
+const LOCAL_WALLET_KEY  = 'quoridor_egg_wallet';
+const LOCAL_OWNED_KEY   = 'quoridor_owned_skills';
+const LOCAL_HISTORY_KEY = 'quoridor_collected_history';
+const LOCAL_LOADOUT_KEY = 'quoridor_skill_loadout';
+
+export const getLocalEggWallet = (): EggWallet => {
+  const s = localStorage.getItem(LOCAL_WALLET_KEY);
+  return s ? JSON.parse(s) : { EGG_BASIC: 0, EGG_GOLD: 0, EGG_RAINBOW: 0 };
+};
+export const getLocalOwnedSkills = (): import('../game/logic').SkillType[] => {
+  const s = localStorage.getItem(LOCAL_OWNED_KEY);
+  return s ? JSON.parse(s) : [];
+};
+export const getLocalCollectedItems = (): import('./types').CollectedItem[] => {
+  const s = localStorage.getItem(LOCAL_HISTORY_KEY);
+  return s ? JSON.parse(s) : [];
+};
+export const getLocalSkillLoadout = (): import('../game/logic').SkillType[] | null => {
+  const s = localStorage.getItem(LOCAL_LOADOUT_KEY);
+  return s ? JSON.parse(s) : null;
+};
+
+/**
+ * Collect an Easter egg: adds to wallet balance + history log.
+ * Returns updated profile fields so App.tsx can do a single setProfile().
+ */
+export const collectEasterEgg = async (
+  userId: string | null,
+  eggType: import('./types').CollectibleType
+): Promise<{ egg_wallet: EggWallet; collected_items: import('./types').CollectedItem[] }> => {
+  const newItem: import('./types').CollectedItem = { type: eggType, collectedAt: new Date().toISOString() };
+
+  if (!isSupabaseConfigured || !userId) {
     // localStorage fallback
-    const stored = JSON.parse(localStorage.getItem('quoridor_collected_items') || '[]');
-    stored.push(item);
-    localStorage.setItem('quoridor_collected_items', JSON.stringify(stored));
-    return;
+    const wallet = getLocalEggWallet();
+    wallet[eggType] = (wallet[eggType] ?? 0) + 1;
+    localStorage.setItem(LOCAL_WALLET_KEY, JSON.stringify(wallet));
+    const history = getLocalCollectedItems();
+    history.push(newItem);
+    localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(history));
+    return { egg_wallet: wallet, collected_items: history };
   }
-  // Append to JSONB array atomically
-  await supabase.rpc('append_collected_item', { user_id: userId, item });
+
+  // Server: atomic update via RPC (adds to wallet + appends to collected_items history)
+  await supabase.rpc('add_egg_to_wallet', { p_user_id: userId, p_egg_type: eggType });
+  // Re-fetch updated profile fields
+  const { data } = await supabase
+    .from('profiles')
+    .select('egg_wallet, collected_items')
+    .eq('id', userId)
+    .single();
+  return {
+    egg_wallet: data?.egg_wallet ?? { EGG_BASIC: 0, EGG_GOLD: 0, EGG_RAINBOW: 0 },
+    collected_items: data?.collected_items ?? [],
+  };
+};
+
+/** Purchase a skill using Easter eggs. Returns 'ok' | 'insufficient' | 'already_owned' | 'error'. */
+export const purchaseSkill = async (
+  userId: string | null,
+  skill: import('../game/logic').SkillType,
+  eggType: import('./types').CollectibleType,
+  cost: number
+): Promise<{ result: 'ok' | 'insufficient' | 'already_owned' | 'error'; egg_wallet?: EggWallet; owned_skills?: import('../game/logic').SkillType[] }> => {
+
+  if (!isSupabaseConfigured || !userId) {
+    // localStorage fallback
+    const wallet = getLocalEggWallet();
+    const owned  = getLocalOwnedSkills();
+    if (owned.includes(skill)) return { result: 'already_owned' };
+    if ((wallet[eggType] ?? 0) < cost) return { result: 'insufficient' };
+    wallet[eggType] -= cost;
+    owned.push(skill);
+    localStorage.setItem(LOCAL_WALLET_KEY, JSON.stringify(wallet));
+    localStorage.setItem(LOCAL_OWNED_KEY, JSON.stringify(owned));
+    return { result: 'ok', egg_wallet: wallet, owned_skills: owned };
+  }
+
+  const { data, error } = await supabase.rpc('purchase_skill_with_eggs', {
+    p_user_id: userId,
+    p_skill: skill,
+    p_egg_type: eggType,
+    p_egg_cost: cost,
+  });
+  if (error) { console.error('purchase_skill_with_eggs error:', error); return { result: 'error' }; }
+  if (data !== 'ok') return { result: data as 'insufficient' | 'already_owned' };
+
+  // Re-fetch updated wallet + owned_skills
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('egg_wallet, owned_skills')
+    .eq('id', userId)
+    .single();
+  return {
+    result: 'ok',
+    egg_wallet: profile?.egg_wallet,
+    owned_skills: profile?.owned_skills ?? [],
+  };
 };
 
 /** Save the user's skill loadout (up to 2 skills, or 3 for Gamepass). */
 export const saveSkillLoadout = async (userId: string | null, loadout: import('../game/logic').SkillType[]) => {
   if (!isSupabaseConfigured || !userId) {
-    localStorage.setItem('quoridor_skill_loadout', JSON.stringify(loadout));
+    localStorage.setItem(LOCAL_LOADOUT_KEY, JSON.stringify(loadout));
     return;
   }
   await supabase.from('profiles').update({ skill_loadout: loadout }).eq('id', userId);
-};
-
-/** Get skill loadout from local storage (fallback). */
-export const getLocalSkillLoadout = (): import('../game/logic').SkillType[] | null => {
-  const stored = localStorage.getItem('quoridor_skill_loadout');
-  return stored ? JSON.parse(stored) : null;
-};
-
-/** Get collected items from local storage (fallback). */
-export const getLocalCollectedItems = (): import('./types').CollectedItem[] => {
-  const stored = localStorage.getItem('quoridor_collected_items');
-  return stored ? JSON.parse(stored) : [];
 };
 
 // --- Server-side XP (Edge Function) ---

@@ -1,10 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CollectibleType, CollectedItem, COLLECTIBLE_META } from '../lib/types';
-
-interface EasterEggOverlayProps {
-  onCollect: (item: CollectedItem) => void;
-}
+import { CollectibleType, COLLECTIBLE_META } from '../lib/types';
 
 function rollEgg(): CollectibleType | null {
   const now = new Date();
@@ -25,8 +21,8 @@ function rollEgg(): CollectibleType | null {
 }
 
 export function useEasterEggSpawner(
-  active: boolean,         // true when game view is active and not game-over
-  onCollect: (item: CollectedItem) => void
+  active: boolean,
+  onCollect: (eggType: CollectibleType) => void
 ) {
   const [activeEgg, setActiveEgg] = useState<{ type: CollectibleType; x: number; y: number } | null>(null);
 
@@ -34,7 +30,6 @@ export function useEasterEggSpawner(
     if (!active || activeEgg) return;
     const type = rollEgg();
     if (!type) return;
-    // Random position on/near board: 10-90% of viewport
     const x = 15 + Math.random() * 70;
     const y = 20 + Math.random() * 55;
     setActiveEgg({ type, x, y });
@@ -42,8 +37,7 @@ export function useEasterEggSpawner(
 
   const collect = useCallback(() => {
     if (!activeEgg) return;
-    const item: CollectedItem = { type: activeEgg.type, collectedAt: new Date().toISOString() };
-    onCollect(item);
+    onCollect(activeEgg.type);
     setActiveEgg(null);
   }, [activeEgg, onCollect]);
 
