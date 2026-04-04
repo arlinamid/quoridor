@@ -254,19 +254,27 @@ export function advanceTurn(state: GameState) {
   state.turn = (state.turn + 1) % n;
 
   const p = state.players[state.turn];
-  if (p.effects) {
+
+  // Check SKIP *before* decrementing so duration-1 effects are still visible
+  if (p.effects?.some(e => e.type === 'SKIP')) {
+    // Remove the SKIP effect, then decay remaining effects for this player
+    p.effects = p.effects.filter(e => e.type !== 'SKIP');
     p.effects.forEach(e => { if (e.duration > 0) e.duration--; });
     p.effects = p.effects.filter(e => e.duration > 0);
-  }
-
-  if (p.effects?.some(e => e.type === 'SKIP')) {
-    p.effects = p.effects.filter(e => e.type !== 'SKIP');
+    // Advance again to the next player
     state.turn = (state.turn + 1) % n;
     const p2 = state.players[state.turn];
     if (p2.effects) {
       p2.effects.forEach(e => { if (e.duration > 0) e.duration--; });
       p2.effects = p2.effects.filter(e => e.duration > 0);
     }
+    return;
+  }
+
+  // Normal duration decay for the upcoming player
+  if (p.effects) {
+    p.effects.forEach(e => { if (e.duration > 0) e.duration--; });
+    p.effects = p.effects.filter(e => e.duration > 0);
   }
 }
 
