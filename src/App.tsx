@@ -300,10 +300,14 @@ export default function App() {
         newP = { ...p, xp: p.xp + 20, level: calculateLevel(p.xp + 20) };
       }
       if (isSupabaseConfigured && session?.user?.id) {
-        awardXp(mode, isOnlineMode(mode) ? won : winnerIndex === 0).then(result => {
-          if (result) setProfile(prev => ({ ...prev, ...result }));
-        }).catch(async () => {
-          const refreshed = await getDbProfile(session!.user.id, session!.user.id);
+        const uid = session.user.id;
+        awardXp(mode, isOnlineMode(mode) ? won : winnerIndex === 0).then(async (result) => {
+          if (result) {
+            setProfile(prev => ({ ...prev, ...result }));
+            return;
+          }
+          // award-xp 401 / hiba: optimista +50/+10 már lefutott — szinkron a DB-vel (ranglista, XP lock)
+          const refreshed = await getDbProfile(uid, uid);
           if (refreshed) setProfile(prev => ({ ...prev, ...refreshed }));
         });
       }
@@ -707,7 +711,8 @@ export default function App() {
         const SKILLS: SkillType[] = ['TELEPORT', 'HAMMER', 'SKIP', 'MOLE', 'DYNAMITE', 'SHIELD', 'WALLS', 'MAGNET', 'TRAP', 'SWAP'];
         if (!p.inventory) p.inventory = [];
         const have = new Set(p.inventory);
-        const found = SKILLS.find(s => !have.has(s));
+        const pool = SKILLS.filter(s => !have.has(s));
+        const found = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : undefined;
         if (found && p.inventory.length < innerCap) {
           next.treasures!.splice(tIdx, 1);
           p.inventory.push(found);

@@ -2,13 +2,27 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
-A **2026-04-04**-i változások (**0.6.0**) élesben futnak (Vercel + Supabase).
+**Éles:** **0.6.1** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.0** (2026-04-04).
 
 ---
 
 ## [Unreleased]
 
 _(Még nincs közzétett változás a következő verzióhoz.)_
+
+---
+
+## [0.6.1] — 2026-04-05
+
+### Fixed
+- **Kincs ásás** — a talált skill **véletlenszerű** a még nem birtokolt típusok közül (`pool` + `Math.random`). Korábban `SKILLS.find(...)` miatt **mindig TELEPORT** volt az első ásás.
+- **`award-xp` / XP–ranglista eltérés** — `refreshSession` + második kísérlet új tokennel; explicit `Authorization` az `functions.invoke`-nál. Ha az Edge Function nem ad vissza adatot, **`getDbProfile`** újraszinkronizálja a profilt (optimista +50/+10 nem marad „légből”; RLS miatt a kliens egyébként sem írhat XP-t).
+- **Online lobby — játék indítása** — sikeres `updateGameState` után a host **azonnal** `game` nézetre vált (`setHostedGameData`, `loadPlayerProfiles`); nem csak a Realtime `postgres_changes`-re várunk (`updateGameState` visszatérő `{ error }`, alert hiba esetén).
+- **Auto-start (2 perc)** — ugyanilyen optimista belépés játékba; `sessionRef` a timeoutban.
+
+### Changed
+- **Online / többjátékos bot AI** (`logic.ts`) — `opponentIndices` (csapat / FFA); `getWallCandidatesNearPath` (P3/P4 fal-jelöltek); erősebb `greedyBotMove` (döntetlenek, veszélyes ellenfél, fal `gain ≥ 1`). Tesztek: `opponentIndices`, 3–4 fős csapatos esetek.
+- **`award-xp` kliens** (korábbi iteráció) — nem írjuk felül kézzel a `Authorization` headert elavult React-session tokennel; `getSession` + közeli lejáratnál refresh.
 
 ---
 
