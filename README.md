@@ -1,144 +1,170 @@
-# Quoridor Falsakk — A Stratégia Játéka
+# Quoridor Falsakk
 
-A Quoridor board game web-alapú implementációja React + Supabase stack-kel.
-Magyar nyelvű felület, **9 játékmód** (klasszikus / kincs / Battlefield × helyi, gép, online), 2–4 játékos online multiplayer, AI botok, kincskeresős skill-rendszer, **Battlefield** (árokmezők + módosított faljuttatás), és Easter egg Gamepass áruház.
+| Élő játék | Forráskód | Verzió |
+| :---: | :---: | :---: |
+| [![Élő demo](https://img.shields.io/badge/Játssz_most-élő_demo-f0c866?style=for-the-badge&logo=googlechrome&logoColor=1a0f08&labelColor=241810)](https://quoridor-snowy.vercel.app) | [![GitHub stars](https://img.shields.io/github/stars/arlinamid/quoridor?style=for-the-badge&logo=github&logoColor=white&labelColor=1a0f08&color=f0c866)](https://github.com/arlinamid/quoridor) | ![0.6.5](https://img.shields.io/badge/verzió-0.6.5-f0c866?style=for-the-badge&labelColor=3d2914) |
 
-**Live:** https://quoridor-snowy.vercel.app
+| [React](https://react.dev/) | [TypeScript](https://www.typescriptlang.org/) | [Vite](https://vitejs.dev/) | [Tailwind](https://tailwindcss.com/) | [Supabase](https://supabase.com/) | [Vercel](https://vercel.com/) | [Three.js](https://threejs.org/) | Felület |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| [![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/) | [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) | [![Vite 6](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/) | [![Tailwind 4](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/) | [![Supabase](https://img.shields.io/badge/Supabase-Auth_%E2%80%A2_DB_%E2%80%A2_RT-3ECF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com/) | [![Vercel](https://img.shields.io/badge/Vercel-hosting-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com/) | [![Three.js](https://img.shields.io/badge/Three.js-háttér-000000?style=flat-square&logo=threedotjs&logoColor=white)](https://threejs.org/) | ![Magyar UI](https://img.shields.io/badge/UI-Magyar-f0c866?style=flat-square&labelColor=1a0f08) |
+
+**Stratégiai táblajáték a böngészőben** — a klasszikus Quoridor „falazós” versenyét egészítjük ki kincsekkel, képességekkel és egy külön **Battlefield** pályatípussal. A felület **magyar nyelvű**; játszhatsz **egymás mellett**, a **gép ellen** vagy **online**, akár **négyen**, csapatban vagy mindenki magának.
+
+### [Játszd most → quoridor-snowy.vercel.app](https://quoridor-snowy.vercel.app)
+
+![Quoridor Falsakk főmenü — QUORIDOR FALSAKK, 1 vs 1, 1 vs gép, multiplayer, szabályok, áruház](docs/readme/main-menu.png)
+
+*Főmenü — fa tábla, 3D háttér, magyar UI; profil, szint és XP a fejlécben.*
+
+---
+
+## Képernyőképek
+
+### Online — játékmód választás
+
+![Online multiplayer: Normal, Kincskereső, Battlefield módok](docs/readme/online-modes.png)
+
+*Online multiplayer: **Normal**, **Kincskereső**, **Battlefield** — külön lobby és szabályok módonként.*
+
+### Játék közben (1 vs gép)
+
+![Játékmenet — 9×9 tábla, bábuk, falak, kör időzítő](docs/readme/gameplay-1v-ai.png)
+
+*Tábla: lépés vagy fal, célzónák, körönkénti időkorlát; kincskereső módban kérdőjel a rejtett kincsen.*
+
+### Statisztika és profil
+
+![Statisztika — győzelem, vereség, win rate, XP sáv, marketing opt-out](docs/readme/stats.png)
+
+*Profil: XP, szint, meccsek, win rate; ranglista fül; adatvédelem és ÁSZF linkek.*
+
+### Áruház és loadout
+
+![Áruház — tojás egyenleg, Gamepass, Bolt tab skillekkel](docs/readme/store.png)
+
+*Áruház: tojás alapú economy, Gamepass (3. skill slot 5. szinttől), vásárolható képességek.*
+
+![Loadout — aktív képességek slotokban, mentés](docs/readme/loadout.png)
+
+*Loadout: induláskor használt képességek (szint szerinti slotok).*
+
+---
+
+## A játék lényege
+
+Minden körben döntesz: **lépsz egyet** (átugrva is lehet az ellenfélt, ha szabályos), **vagy falat helyezel el**. A cél: **elsőként elérni a szemközti oldalt** (vagy a pályán kijelölt célvonalat). A falak szűkítik a teret — egyszerre taktika, blöff és versenyfutás.
+
+A **Kincskereső** és **Battlefield** módok ezt tovább bontják: a pályán kincsek lapulnak, **ásással** új képességeket szerezhetsz, és olyan skilljeid lehetnek, mint a teleport, a kalapács, a pajzs vagy a csapda. **Battlefield** alatt a táblán **árokmezők** is vannak (nem járhatsz át rajtuk), **kevesebb fal** jár játékosonként, és a csapdák egy része **csak a lerakónak látszik** — feszesebb, „terep” érzetű meccsek.
+
+---
+
+## Mit kapsz egy helyen?
+
+| Élmény | Röviden |
+|--------|---------|
+| **9 játékmód** | Klasszikus / Kincskereső / Battlefield × helyi 1v1, gép ellen, online |
+| **2–4 játékos online** | Lobby, meghívószerű várakozó lista, host indítja a meccset |
+| **Csapatjáték** | 3–4 főnél FFA vagy fix felállás (pl. 1 kontra 2, 2 kontra 2) |
+| **Botok** | Üres helyeket feltölthetsz gépi játékossal — így mindig összejön a létszám |
+| **AI nehézségek** | Könnyű, közepes, nehéz — egyjátékos módban gyakorolhatsz |
+| **Szint & ranglista** | XP győzelemért és részvételért; profil, statisztika |
+| **Áruház & kinézetek** | Tojásokból vásárolható képességek, bábu skinek, Gamepass előnyök |
+| **Hangulat** | Fa tábla, animációk, 3D-s háttér — nem egy száraz „demó”, hanem játékérzet |
 
 ---
 
 ## Játékmódok
 
-| Mód | Leírás | XP |
-|-----|--------|-----|
-| **1 vs 1 — Normal** | Helyi kétjátékos | +20 XP |
-| **1 vs 1 — Kincskereső** | Helyi kétjátékos, kincsekkel és skillekkel | +20 XP |
-| **1 vs 1 — Battlefield** | Kincs + skillek + **árokmezők** (I/L/T), kevesebb fal (5/fő 2 játékosnál) | +20 XP |
-| **1 vs Gép — Normal** | AI: Könnyű (2 mélység), Közepes (4 + erős heurisztika, fal-szűrés), Nehéz (5 + szűkebb fal-szűrés) | +50 győzelem / +10 vereség |
-| **1 vs Gép — Kincskereső** | AI + treasure mode | +50 / +10 |
-| **1 vs Gép — Battlefield** | AI + árok + kincs; ároknál mobilitás- és heurisztika-finomhangolás | +50 / +10 |
-| **Online — Normal** | Valós idejű 2–4 játékos multiplayer | +50 / +10 |
-| **Online — Kincskereső** | Online + treasure mode | +50 / +10 |
-| **Online — Battlefield** | Külön lobby lista; állapot: `treasureMode` + `battlefieldMode` + `trenches` | +50 / +10 |
+| Mód | Neked való, ha… | XP (összefoglalva) |
+|-----|-----------------|---------------------|
+| **1 vs 1 — Normal** | Tiszta, gyors Quoridor ketten, egy képernyőn | +20 helyi |
+| **1 vs 1 — Kincskereső** | Ugyanez + kincsek, ásás, skillek | +20 helyi |
+| **1 vs 1 — Battlefield** | Kincs + skillek + árkok + kevesebb fal | +20 helyi |
+| **1 vs Gép** *(3 nehézség)* | Magadban tanulnál vagy kikapcsolódnál | +50 győzelem / +10 vereség |
+| **Online — Normal / Kincs / Battlefield** | Barátokkal vagy ismeretlenekkel, valós időben | +50 / +10 |
+
+Az online **Battlefield** meccsek **külön lobbyban** jelennek meg, hogy azonos szabályú társakat találj.
 
 ---
 
-## Multiplayer funkciók
+## Online: miért működik jól?
 
-- **2–4 játékos** — a host választja a létszámot (2/3/4) a lobby előtt
-- **AI botok** — üres slotok feltölthetők bottal; a bot BFS-alapú greedy algoritmust használ, és a host klienséről fut
-- **Kézi indítás** — host indíthat, ha ≥2 slot foglalt; 2 perc után automatikus indítás
-- **Visszacsatlakozás** — kiesés után 2 percen belül újra be lehet lépni a meccsbe
-- **Heartbeat rendszer** — 30 másodpercenként életjelet küld; inaktív játékok 2 perc után automatikusan lezáródnak
-- **Játékon belüli maradás** — új online meccs nem indítható, amíg egy másikban benne vagy
-- **Online csapatbeosztás (3–4 játékos)** — a host a lobbyban választhat szabad játékot (FFA) vagy fix csapatelrendezést (pl. három játékosnál 1v2 / 2v1, négy játékosnál 2v2); a győzelem képernyő csapat szerint értelmezi a nyerést
-- **Battlefield online** — a várakozó meccsek **Normal / Kincskereső / Battlefield** szerint szétválasztva jelennek meg; a játék JSON állapotában `battlefieldMode` és `trenches` tárolódik
-- **Lobby kilépés (joiner)** — a várakozó képernyőről való visszalépéskor a kliens meghívja a **`leave_waiting_game`** RPC-t, így a játékos **kiszáll a DB-sorból** és felszabadul a hely; a host továbbra is a teljes meccs **lemondásával** (`cancelled`) lép ki
+- **Várakozó szoba** — létrehozol vagy csatlakozol egy meccshez; a host elindítja, ha legalább ketten vagytok (vagy botokkal kiegészítve).
+- **Visszalépés** — ha megszakad a kapcsolat, rövid időn belül visszatérhetsz a folyamatban lévő partiba.
+- **Csapat üzenetek** — ha csapatban játszotok, a győzelem képernyő **csapattársakra** is szabott (nem csak „te nyertél / vesztettél”).
+- **Igazságos lezárás** — inaktív meccsek lezárása, hogy ne maradjon „örökre nyitott” játék a listában.
 
 ---
 
-## Jogi dokumentumok és adatvédelem
+## Szabályok röviden
 
-- **ÁSZF** és **adatvédelmi tájékoztató** elérhető a bejelentkezési képernyőn, valamint a **Profil / ranglista** nézetben (`LegalDocs.tsx`). A jogi képernyő „Vissza” gombja oda visz vissza, ahonnan megnyitották (auth vagy profil).
-- **Marketing opt-out** — opcionális promóciós megkeresések kikapcsolása a profilban (jelölőnégyzet). A beállítás a `profiles.marketing_opt_out` oszlopban tárolódik; **nem** szerepel a nyilvános `profiles_peer` nézetben.
-- **Adatbázis**: új vagy meglévő projekten futtasd a migrációt `supabase/migrations/20260404120090_profile_marketing_opt_out.sql`, vagy manuálisan:
+- **Tábla:** 9×9 mező; **2–4 játékos**, mindegyiknek saját **indulási oldal** és **célja** van (sor vagy oszlop szerint).
+- **Falak:** klasszikus módban 10 / 7 / 5 fal játékosszámtól függően; **Battlefield** alatt kevesebb, cserébe **árok** van a pályán.
+- **Szabályos fal:** minden bábunak marad útja a cél felé.
+- **Kincskereső / Battlefield:** a pályán kincsek; **ásással** új skill kerül a készletedbe (szabályok szerinti limit és pool).
+- A részletes szabályok és skill leírások **a játék „Szabályok” oldalán** is elérhetők.
 
-```sql
-alter table profiles add column if not exists marketing_opt_out boolean not null default false;
-```
+### Képességek (Kincskereső) — áttekintés
 
-Részletes séma és megjegyzések: `supabase-schema.sql`.
-
----
-
-## Tech Stack
-
-| Réteg | Technológia |
-|-------|-------------|
-| Frontend | React 19, TypeScript |
-| Build | Vite 6 |
-| Stílus | Tailwind CSS 4 |
-| Animáció | Motion (Framer Motion) |
-| 3D háttér | Three.js |
-| Backend | Supabase (PostgreSQL + Realtime + Edge Functions) |
-| Auth | Supabase Anonymous Auth |
-| Deploy | Vercel (SPA + serverless API routes) |
-| DB Cron | Supabase pg_cron |
+| Képesség | Mire jó? |
+|----------|----------|
+| **TELEPORT** | Rövid ugrás üres mezőre (árokra nem) |
+| **HAMMER** | Egy fal ledöntése |
+| **SKIP** | Ellenfél egy körének kihagyása |
+| **MOLE** | Következő körben falakon át is léphetsz |
+| **DYNAMITE** | Egy kereszteződés körüli falak robbanása |
+| **SHIELD** | Rövid ideig védelem falak ellen |
+| **WALLS** | Extra falak azonnal |
+| **MAGNET** | Ellenfelek mezőhúzása (szabályok szerint) |
+| **TRAP** | Rejtett csapda — Battlefield alatt csak a lerakó látja jól |
+| **SWAP** | Pozíciócsere egy ellenféllel |
 
 ---
 
-## Projekt struktúra
+## Tojások, áruház, Gamepass
 
-```
-src/
-  App.tsx                    # Fő állapotkezelés és routing
-  game/
-    logic.ts                 # Játéklogika: BFS, Minimax, skill rendszer, 4 játékos, árok / Battlefield
-    battlefield.ts           # Tetrominó árok generálás (Battlefield)
-  components/
-    QuoridorBoard.tsx        # Játéktábla UI (17×17 grid, skálázható cellaméret)
-    ThreeBackground.tsx      # Three.js 3D háttér
-    Rules.tsx                # Szabályok oldal
-    LegalDocs.tsx            # ÁSZF és Adatvédelem
-    EasterEggOverlay.tsx     # Floating egg spawn + useEasterEggSpawner hook
-    SessionWarning.tsx       # Húsvéti esemény banner (ápr. 4–8.)
-    views/
-      AuthView.tsx           # Bejelentkezési képernyő (vendég + magic link tab)
-      MenuView.tsx           # Lépcsőzetes főmenü (+ Áruház gomb)
-      LobbyView.tsx          # Online lobby (2–4 játékos, bot slot-ok)
-      GameView.tsx           # Játékfelület (dinamikus 2–4 játékos panel, Easter egg overlay)
-      LeaderboardView.tsx    # Statisztikák, ranglista, profil, fiók upgrade, marketing opt-out, ÁSZF/adatvédelem linkek
-      StoreView.tsx          # Gamepass áruház (Bolt / Loadout / Gyűjtemény tab)
-  lib/
-    supabase.ts              # Supabase kliens, auth, DB, RPC hívások, egg wallet
-    types.ts                 # Megosztott típusok (GameMode, View, CollectibleType, COLLECTIBLE_META)
-    fingerprint.ts           # Eszközazonosítás visszatérő játékosokhoz
-    utils.ts                 # cn() segédfüggvény
+Játék közben **ritka tojások** bukkanhatnak fel (különösen eseményidőszakban). Ezekből az **Áruházban** vásárolhatsz skilleket és **bábu kinézeteket**. A **Gamepass** (magasabb szinten) több képességhelyet ad a loadoutban.
 
-api/                         # Vercel serverless API route-ok
-  active-game.ts             # GET ?userId= — aktív játék keresése (visszalépéshez)
-  heartbeat.ts               # POST — életjel + stale game sweep
-  cleanup-games.ts           # GET — inaktív játékok lezárása (pg_cron hívja)
+| Tojás | Szerepe |
+|-------|---------|
+| Alap | Közönségesebb skillek |
+| Arany | Ritka képességek |
+| Szivárvány | Látványos, erősebb opciók |
 
-supabase/
-  functions/
-    award-xp/
-      index.ts               # Edge Function: server-side XP kiosztás
-```
+*(A pontos drop és ár a játékban látható.)*
 
 ---
 
-## Telepítés
+## Fiók, adatvédelem, jog
+
+- Bejelentkezés **vendégként** vagy **e-mail (magic link)** jelszó nélkül.
+- **ÁSZF** és **adatvédelmi tájékoztató** a bejelentkezési képernyőn és a profil/ranglista nézetben.
+- **Marketing értesítések** kikapcsolhatók a profilban.
+
+---
+
+## Fejlesztőknek
+
+Nyílt forráskódú frontend; a teljes **adatbázis-séma**, **RPC-k** és **migrációk** a repóban: `supabase-schema.sql`, `supabase/migrations/`. Változások: **`CHANGELOG.md`**.
+
+### Technológia (röviden)
+
+React 19, TypeScript, Vite, Tailwind, Motion, Three.js háttér; **Supabase** (auth, Postgres, realtime); deploy **Vercel**; API route-ok heartbeat és játék-életciklushoz.
+
+### Lokális futtatás
 
 ```bash
 npm install
+cp .env.example .env.local   # töltsd ki a Supabase kulcsokkal, ha kell online
+npm run dev
 ```
-
-### Környezeti változók (`.env.local`)
 
 ```env
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
 ```
 
-Ha a Supabase nincs konfigurálva, az app lokális módban indul (localStorage profil, nincs online funkció).
-
-### Vercel környezeti változók (dashboard → Settings → Environment Variables)
-
-A Vercel serverless API route-okhoz (`/api/*`) a service role key szükséges az RLS megkerüléséhez:
-
-```
-SUPABASE_URL              = https://<project>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY = <service-role-key>
-```
-
-> ⚠️ A service role key csak a Vercel szerver oldalon használható — soha ne kerüljön a frontend kódba vagy `.env.local`-ba.
-
-### Fejlesztési szerver
-
-```bash
-npm run dev
-```
+Supabase nélkül a játék **lokális profillal** is elindul (nincs online).
 
 ### Build
 
@@ -146,245 +172,25 @@ npm run dev
 npm run build
 ```
 
-### Deploy (Vercel)
+### Vercel + Supabase (éles)
 
-```bash
-npx vercel --prod
+- A `api/` route-okhoz a Vercelen **`SUPABASE_URL`** és **`SUPABASE_SERVICE_ROLE_KEY`** kell (csak szerveroldalon).
+- Migrációk feltöltése: `npx supabase db push --linked --yes` (részletek: `CHANGELOG.md`, `supabase/migrations/`).
+
+### További SQL, cron, Edge Function
+
+A korábbi, részletes **CREATE TABLE**, **pg_cron**, **award-xp** deploy és store RPC példák a repó **`supabase/migrations/`** fájljaiban és a **`supabase-schema.sql`** dokumentumban találhatók — ott érdemes karbantartani, hogy ne duplikáljuk őket a README-ben.
+
+### README: Markdown és (opcionális) HTML
+
+- **Badge-ek:** `[![szöveg](shields.io URL)](link)` — vagy táblázatcellában, ahogy a fájl tetején.
+- **Képek:** `![alternatív szöveg](docs/readme/kép.png)` — tiszta Markdown, a GitHub a tároló szélességéhez igazítja.
+- **Ha kell középre igazítás vagy fix szélesség** (pl. `width="780"`), egy sorban használhatsz HTML-t is (a GitHub README GFM ezt engedi):
+
+```html
+<p align="center"><img src="docs/readme/main-menu.png" alt="Főmenü" width="780" /></p>
 ```
 
 ---
 
-## Supabase setup
-
-### Táblák
-
-```sql
--- profiles
-create table profiles (
-  id uuid primary key references auth.users,
-  username text,
-  xp integer default 0,
-  wins integer default 0,
-  losses integer default 0,
-  level integer default 1,
-  fingerprint text,
-  created_at timestamptz default now(),
-  -- Gamepass & Store (migration szükséges ha meglévő tábla)
-  collected_items jsonb default '[]',
-  skill_loadout   text[],
-  egg_wallet      jsonb default '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}',
-  owned_skills    text[] default '{}',
-  marketing_opt_out boolean not null default false
-);
-
--- games
-create table games (
-  id uuid primary key default gen_random_uuid(),
-  player1_id uuid references profiles(id),
-  player2_id uuid references profiles(id),
-  player3_id uuid references profiles(id),
-  player4_id uuid references profiles(id),
-  state jsonb,
-  status text default 'waiting',   -- waiting | playing | finished | abandoned | cancelled
-  winner_id uuid references profiles(id),
-  max_players integer default 2,
-  last_heartbeat timestamptz default now(),
-  created_at timestamptz default now()
-);
-```
-
-### Migrációk (ha meglévő táblák frissítése szükséges)
-
-**CLI — lokális `supabase/migrations/*.sql` feltöltése a linkelt projektre** (bejelentkezett Supabase CLI + `supabase link` után):
-
-```bash
-npx supabase db push --linked --yes
-```
-
-Egy példa új függvény: **`leave_waiting_game`** (joiner kilépés waiting lobbyból) — fájl: `supabase/migrations/20260405210000_leave_waiting_game_rpc.sql`. Ugyanez manuálisan: másold be a migráció SQL-jét a Supabase **SQL Editor**ba.
-
-```sql
--- games tábla bővítések
-alter table games add column if not exists max_players integer default 2;
-alter table games add column if not exists player3_id uuid references auth.users(id);
-alter table games add column if not exists player4_id uuid references auth.users(id);
-alter table games add column if not exists last_heartbeat timestamptz default now();
-
--- profiles tábla — Gamepass & Store
-alter table profiles add column if not exists collected_items jsonb default '[]'::jsonb;
-alter table profiles add column if not exists skill_loadout text[] default null;
-alter table profiles add column if not exists egg_wallet jsonb default '{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb;
-alter table profiles add column if not exists owned_skills text[] default '{}'::text[];
-alter table profiles add column if not exists marketing_opt_out boolean not null default false;
-```
-
-### Store RPC függvények
-
-```sql
--- Tojás hozzáadása a tárcához (játék közben)
-create or replace function add_egg_to_wallet(p_user_id uuid, p_egg_type text, p_amount int default 1)
-returns void language sql security definer as $$
-  update profiles set
-    egg_wallet = jsonb_set(coalesce(egg_wallet,'{"EGG_BASIC":0,"EGG_GOLD":0,"EGG_RAINBOW":0}'::jsonb),
-      array[p_egg_type], to_jsonb(coalesce((egg_wallet ->> p_egg_type)::int, 0) + p_amount)),
-    collected_items = coalesce(collected_items,'[]'::jsonb) ||
-      jsonb_build_object('type', p_egg_type, 'collectedAt', now()::text)::jsonb
-  where id = p_user_id;
-$$;
-
--- Skill vásárlás tojásokkal (áruházban)
-create or replace function purchase_skill_with_eggs(
-  p_user_id uuid, p_skill text, p_egg_type text, p_egg_cost int
-) returns text language plpgsql security definer as $$
-declare current_wallet jsonb; current_bal int;
-begin
-  select egg_wallet into current_wallet from profiles where id = p_user_id for update;
-  if exists (select 1 from profiles where id = p_user_id and p_skill = any(owned_skills)) then return 'already_owned'; end if;
-  current_bal := coalesce((current_wallet ->> p_egg_type)::int, 0);
-  if current_bal < p_egg_cost then return 'insufficient'; end if;
-  update profiles set
-    egg_wallet   = jsonb_set(egg_wallet, array[p_egg_type], to_jsonb(current_bal - p_egg_cost)),
-    owned_skills = array_append(owned_skills, p_skill)
-  where id = p_user_id;
-  return 'ok';
-end;
-$$;
-```
-
-### Status constraint (kötelező migráció)
-
-A `games` táblának mind az 5 státuszt engedélyezni kell:
-
-```sql
-alter table games drop constraint if exists games_status_check;
-alter table games add constraint games_status_check
-  check (status = any (array['waiting','playing','finished','abandoned','cancelled']));
-```
-
-> Ha ez hiányzik, a pg_cron és a `cancelGame()` hívások csendesen hibáznak.
-
-### pg_cron — automatikus játék lezárás
-
-```sql
-create extension if not exists pg_cron;
-
-select cron.schedule(
-  'cleanup-stale-games',
-  '*/2 * * * *',
-  $$
-    update games
-    set status = 'abandoned'
-    where status = 'playing'
-      and last_heartbeat < now() - interval '2 minutes'
-  $$
-);
-```
-
-A cron futásainak ellenőrzése:
-
-```bash
-npx supabase db query --linked \
-  "SELECT jobid, status, return_message, start_time FROM cron.job_run_details ORDER BY start_time DESC LIMIT 5;"
-```
-
-### Edge Function deploy
-
-```bash
-supabase functions deploy award-xp --project-ref <project-ref>
-```
-
-Az `award-xp` Edge Function server-side XP validációt végez — megakadályozza a kliens oldali XP manipulációt. CORS fejlécek konfigurálva (`Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: POST, OPTIONS`).
-
----
-
-## Játékszabályok
-
-- 9×9-es tábla, 2–4 játékos
-- **P1** (piros): sor 0 → sor 8 · **P2** (sötétkék): sor 8 → sor 0
-- **P3** (zöld): oszlop 0 → oszlop 8 · **P4** (lila): oszlop 8 → oszlop 0
-- Falak kezdeti száma: **10** (2 jt.) / **7** (3 jt.) / **5** (4 jt.) — klasszikus és Kincskereső
-- **Battlefield:** falak **5** (2 jt.) / **4** (3 jt.) / **3** (4 jt.); **árokmezők** nem járhatók; kincs nem esik árokra; ásás nem ad **TRAP** skillt; csapdánál Battlefield alatt csak a lerakó látja a jelölőt
-- Fal lerakása után mindenkinek kell elérési útvonalnak lennie (BFS validáció)
-- Ugrás lehetséges, ha az ellenfél szomszédos és mögötte szabad (cél nem lehet árok)
-- **Kincskereső / Battlefield**: `játékosszám × 2` kincs; kiásással skilleket lehet szerezni (szint szerinti plafon; Battlefield: TRAP nem jöhet ki a kincsből)
-
-### Skill lista
-
-Minden skill egy 56×56 px-es ikon gombként jelenik meg, játékos-specifikus akcentszínnel. Hover-re animált tooltip mutatja a nevet és a leírást. Az ellenfél skilljei `???`-ként rejtve jelennek meg online módban.
-
-| Skill | Ikon | Szín | Leírás |
-|-------|------|------|--------|
-| TELEPORT | ⚡ Zap | lila | Ugrás legfeljebb 2 cellára (célpont kijelölése); árokra nem |
-| HAMMER | 🔨 Hammer | narancs | Egy fal lerombolása (célpont kijelölése) |
-| SKIP | ⏭ SkipForward | kék | Ellenfél következő körét kihagyja |
-| MOLE | ⛏ Pickaxe | lime | Következő körben átsétálhatsz falakon |
-| DYNAMITE | 🔥 Flame | piros | Egy metszésponthoz csatlakozó összes fal robbantása (célpont) |
-| SHIELD | 🛡 Shield | cián | 2 körre blokkolja a vízszintes falakat előtted |
-| WALLS | ➕ Plus | arany | Azonnal kapsz 2 extra falat |
-| MAGNET | 🧲 Magnet | rózsaszín | Ellenfeleket húzza; cél nem lehet foglalt vagy árok |
-| TRAP | 🎯 Crosshair | narancs | Üres, nem árok mező; Battlefield: csak a lerakó látja a jelölőt; belépéskor start |
-| SWAP | ↔ ArrowLeftRight | zöld | Pozíció csere az ellenféllel |
-
----
-
-## Gamifikáció
-
-- **XP → Szint**: `szint = floor(sqrt(xp / 100)) + 1`
-- XP kiosztása server-side az `award-xp` Edge Functionön keresztül
-- Ranglista: top 10 játékos XP szerint
-- Eszközazonosítás: visszatérő játékosok automatikus felismerése fingerprint alapján
-- Lokális fallback: Supabase nélkül is működik localStorage-ban
-
----
-
-## Gamepass & Áruház
-
-```
-Játék közben → Easter egg spawn (véletlenszerű) → kattintás → egg_wallet nő
-Áruház → Bolt tab → skill kártya + tojás ár → Megvétel → owned_skills frissül
-Áruház → Loadout tab → max 2 skill (3 Gamepass-szel, Lvl 5+) → mentés
-Játék indul → loadout skilljeivel kezd a P0 / saját slot (online)
-```
-
-### Easter egg ritkasági szintek
-
-Spawn: játék között **legalább ~28 s** telik el két **dobási kísérlet** között (nem minden kör váltáskor dob). A táblázat **egy kísérletre** vonatkozó valószínűség.
-
-| Tojás | Húsvéti esemény (ápr. 4–8.) | Normál | Érték |
-|-------|--------------------------|--------|-------|
-| 🥚 Alap (EGG_BASIC) | ~3.3% / kísérlet | 0.3% | Közönséges skillekhez |
-| 🌟 Arany (EGG_GOLD) | ~0.9% / kísérlet | 0.15% | Ritka skillekhez |
-| 🌈 Szivárvány (EGG_RAINBOW) | ~0.3% / kísérlet | 0.05% | Legendás skillekhez |
-
-### Skill árak
-
-| Tier | Skillek | Ár |
-|------|---------|-----|
-| Alap | Extra Falak (2×🥚), Kalapács (3×🥚), Átugrás (4×🥚) | Alap tojás |
-| Arany | Pajzs (1×🌟), Vakond/Teleport (2×🌟), Mágnes/Csapda (3×🌟) | Arany tojás |
-| Legendás | Dinamit (1×🌈), Csere (2×🌈) | Szivárvány tojás |
-
-### Gamepass
-
-Szint 5+ automatikusan feloldja a Gamepass-t:
-- 3. loadout képességhely (alapból 2)
-- (jövőben bővíthető előnyök)
-
----
-
-## Heartbeat & játék életciklus
-
-```
-Játék állapotok:
-  waiting → playing → finished   (normál befejezés)
-          → cancelled             (host kilép lobby-ból)
-                    → abandoned  (heartbeat timeout)
-
-Heartbeat folyamat:
-  Kliens  ──POST /api/heartbeat every 30s──▶  Supabase DB (last_heartbeat)
-  pg_cron ──every 2 min────────────────────▶  abandoned if last_heartbeat > 2 min
-
-Időtúllépés (per-move, 2 perc):
-  2 játékos:   időtúllépő játékos veszít
-  3–4 játékos: időtúllépő játékos köre kihagyódik, a következő játékos lép
-```
+*Quoridor Falsakk — egy stratégiai táblajáték, amit érdemes **kipróbálni**, nem csak **klónozni**.*
