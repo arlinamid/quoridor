@@ -363,20 +363,26 @@ export function GameView({
       <div className="h-6 text-sm text-[#f0c866] animate-pulse text-center">{statusMsg}</div>
 
       {/* Screen Shake Effect */}
-      {screenShake && (
-        <ScreenShake intensity={screenShake} />
-      )}
+      <AnimatePresence>
+        {screenShake && (
+          <ScreenShake intensity={screenShake} />
+        )}
+      </AnimatePresence>
 
-      {/* Skill Effects Overlay */}
-      {activeSkillEffect && (
-        <SkillEffects
-          type={activeSkillEffect.type as SkillEffectType}
-          position={activeSkillEffect.position}
-          playerPosition={activeSkillEffect.playerPosition}
-          targetPosition={activeSkillEffect.targetPosition}
-          cellSize={44}
-        />
-      )}
+      {/* Skill Effects Overlay - Full screen container positioned over the board */}
+      <AnimatePresence>
+        {activeSkillEffect && (
+          <div className="fixed inset-0 pointer-events-none z-50">
+            <SkillEffects
+              type={activeSkillEffect.type as SkillEffectType}
+              position={activeSkillEffect.position}
+              playerPosition={activeSkillEffect.playerPosition}
+              targetPosition={activeSkillEffect.targetPosition}
+              cellSize={44}
+            />
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {easterEgg && onEasterEggCollect && (
