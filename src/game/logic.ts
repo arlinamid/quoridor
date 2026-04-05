@@ -27,6 +27,18 @@ export type Wall = { r: number; c: number; orient: 'h' | 'v' };
 /** Lobby / waiting row: FFA vagy fix csapatbeosztás 3–4 játékosnál. */
 export type OnlineTeamLayoutId = 'ffa' | '3_1v2' | '3_2v1' | '4_2v2';
 
+/** Online: skill/dig FX szinkron ellenfeleknek — nem tartalmazza a konkrét skill nevét (rejtett animáció). */
+export type SkillFxBroadcast = {
+  actorIdx: number;
+  actorPos: { r: number; c: number };
+  target?: { r: number; c: number };
+  partnerPos?: { r: number; c: number };
+  opponents?: Array<{ r: number; c: number }>;
+  preMs: number;
+  postMs: number;
+  seq: number;
+};
+
 export type GameState = {
   players: Player[];
   walls: Wall[];
@@ -46,7 +58,17 @@ export type GameState = {
   traps?: { r: number; c: number; owner: number }[];
   /** Nem léphető cellák (Tetris-I/L/T árkok). */
   trenches?: { r: number; c: number }[];
+  /** Csak online skill/dig pillanatban; kliens nem tárolja hosszan, ellenfélnek rejtett FX-hez. */
+  skillFxBroadcast?: SkillFxBroadcast;
 };
+
+/** UI / lokális állapot: ne tartalmazzon ideiglenes broadcast kulcsot. */
+export function stripSkillFxBroadcast(s: GameState): GameState {
+  if (s.skillFxBroadcast === undefined) return s;
+  const o = { ...s };
+  delete (o as { skillFxBroadcast?: SkillFxBroadcast }).skillFxBroadcast;
+  return o;
+}
 
 export type InitStateOptions = { battlefield?: boolean };
 
@@ -334,6 +356,7 @@ export function cloneS(s: GameState): GameState {
     treasures: s.treasures ? s.treasures.map(t => ({ ...t })) : undefined,
     traps: s.traps ? s.traps.map(t => ({ ...t })) : undefined,
     trenches: s.trenches ? s.trenches.map(t => ({ ...t })) : undefined,
+    skillFxBroadcast: s.skillFxBroadcast ? { ...s.skillFxBroadcast } : undefined,
   };
 }
 

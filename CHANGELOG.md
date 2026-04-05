@@ -2,7 +2,24 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
-**Éles:** **0.6.4** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.3** (2026-04-05).
+**Éles:** **0.6.5** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.4** (2026-04-05).
+
+---
+
+## [0.6.5] — 2026-04-05
+
+### Added
+- **Online skill- és ásás-FX szinkron** — a játékállapot JSON-ban rövid életű **`skillFxBroadcast`** (színész index, pozíciók, opcionális cél/partner/ellenfelek, `preMs` / `postMs`, **`seq`**). A broadcast **nem tartalmazza a skill nevét**; ellenfelek ugyanazzal az időzítéssel látják az effektet: **pre** fázis még a régi táblán, majd szinkron **setGameState**, **post** fázis, végül törlés.
+- **`SkillFxOverlay` — `HIDDEN`** — semleges (arany/barna) pre/post animáció: gyűrűk, szaggatott vonalak, ív; az ellenfél nem látja, melyik konkrét képesség volt.
+
+### Changed
+- **`App.tsx`** — Realtime `games` `UPDATE`: ellenfélnek async FX lejátszás; **`seq`** alapú duplikátum-szűrés; **`remoteSkillFxBusyRef`** átfedés ellen; saját játékos továbbra is a teljes, skill-specifikus FX-et látja lokálisan.
+- **Lépés / fal / időtúllépés (online)** — `skillFxBroadcast` törlése a kimenő állapotból.
+- **Lobby → játék, join, rejoin** — `stripSkillFxBroadcast` a betöltött állapoton.
+- **`logic.ts`** — `SkillFxBroadcast` típus, `stripSkillFxBroadcast()`, `cloneS` másolja a broadcast mezőt.
+
+### Tests
+- **`stripSkillFxBroadcast`** egységteszt (`logic.test.ts`).
 
 ---
 

@@ -4,6 +4,7 @@ import {
   teamsForOnlineLayout, viewerSharesWin, cloneS, isValidTrapPlacement, trapAffectsVictim, viewerSeesTrapMarker,
   evHard, mmRoot, opponentIndices, getWallCandidatesNearPath, greedyBotMove,
   gapAdjacentCells, wallFromGapVisual, isGapBetweenPlayerAndValidMove, orthoTrenchNeighborCount,
+  stripSkillFxBroadcast,
   type GameState,
 } from './logic';
 
@@ -116,6 +117,22 @@ describe('initState', () => {
     const s = initState(false, 2, ['TRAP', 'TELEPORT', 'HAMMER'], undefined, { battlefield: true });
     expect(s.players[0].inventory).not.toContain('TRAP');
     expect(s.players[0].inventory).toContain('TELEPORT');
+  });
+});
+
+describe('stripSkillFxBroadcast', () => {
+  it('removes skillFxBroadcast without cloning whole state', () => {
+    const s = initState(false, 2);
+    s.skillFxBroadcast = {
+      actorIdx: 0,
+      actorPos: { r: 1, c: 1 },
+      preMs: 100,
+      postMs: 200,
+      seq: 42,
+    };
+    const t = stripSkillFxBroadcast(s);
+    expect(t.skillFxBroadcast).toBeUndefined();
+    expect(s.skillFxBroadcast).toBeDefined();
   });
 });
 

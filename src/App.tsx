@@ -4,7 +4,7 @@ import { ThreeBackground } from './components/ThreeBackground';
 import {
   GameState, initState, mmRoot, evHard, greedyBotMove, SkillType, cloneS, applySkill, advanceTurn, hasWon, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, trapAffectsVictim, type OnlineTeamLayoutId,
-  maxTreasureInventorySlots,
+  maxTreasureInventorySlots, stripSkillFxBroadcast,
 } from './game/logic';
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
@@ -94,6 +94,11 @@ export default function App() {
   const profileRef = useRef(profile);
   // handleWinRef populated after handleWin is defined (see below)
   const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string, snap?: GameState) => void>(() => {});
+  /** Online skill FX broadcast: monoton növekvő seq (duplikált Realtime események kiszűrése). */
+  const skillFxSeqRef = useRef(0);
+  const lastSentSkillFxSeqRef = useRef(-1);
+  const lastProcessedSkillFxSeqRef = useRef(-1);
+  const remoteSkillFxBusyRef = useRef(false);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
   useEffect(() => {
@@ -373,11 +378,57 @@ export default function App() {
             );
           }
           if (typeof g.max_players === 'number' && g.max_players >= 2) setMaxPlayers(g.max_players);
-          setGameState(gs);
+          setGameState(stripSkillFxBroadcast(gs));
           setView('game');
         } else if (g.status === 'playing' || g.status === 'waiting') {
-          // Non-lobby update: just sync state
-          if (g.state && viewRef.current === 'game') setGameState(g.state);
+          if (g.state && viewRef.current === 'game') {
+            const raw = g.state as GameState;
+            const b = raw.skillFxBroadcast;
+            const clean = stripSkillFxBroadcast(raw);
+            const role = onlineRoleRef.current;
+            if (!b) {
+              setGameState(clean);
+            } else if (role === b.actorIdx) {
+              setGameState(clean);
+            } else if (b.seq === lastProcessedSkillFxSeqRef.current) {
+              setGameState(clean);
+            } else if (remoteSkillFxBusyRef.current) {
+              setGameState(clean);
+            } else {
+              lastProcessedSkillFxSeqRef.current = b.seq;
+              remoteSkillFxBusyRef.current = true;
+              void (async () => {
+                try {
+                  setAnimating(true);
+                  setSkillFx({
+                    skill: 'HIDDEN',
+                    phase: 'pre',
+                    actorIdx: b.actorIdx,
+                    actorPos: b.actorPos,
+                    target: b.target,
+                    partnerPos: b.partnerPos,
+                    opponents: b.opponents,
+                  });
+                  await new Promise<void>(res => setTimeout(res, b.preMs));
+                  setGameState(clean);
+                  setSkillFx({
+                    skill: 'HIDDEN',
+                    phase: 'post',
+                    actorIdx: b.actorIdx,
+                    actorPos: b.actorPos,
+                    target: b.target,
+                    partnerPos: b.partnerPos,
+                    opponents: b.opponents,
+                  });
+                  await new Promise<void>(res => setTimeout(res, b.postMs));
+                  setSkillFx(null);
+                } finally {
+                  setAnimating(false);
+                  remoteSkillFxBusyRef.current = false;
+                }
+              })();
+            }
+          }
         }
         if (g.status === 'finished' && !showWinRef.current) {
           // Find winner slot by matching winner_id against all player slots
@@ -583,6 +634,7 @@ export default function App() {
             if (prev.gameOver || showWinRef.current) return prev;
             const next = cloneS(prev);
             next.lastMoveTime = Date.now();
+            next.skillFxBroadcast = undefined;
             advanceTurn(next);
             updateGameState(currentGameId!, next, 'playing');
             return next;
@@ -735,6 +787,7 @@ export default function App() {
         consumeActiveMole(next.players[prev.turn]);
         advanceTurn(next);
       }
+      next.skillFxBroadcast = undefined;
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
       if (isWin) setTimeout(() => handleWinRef.current(prev.turn, false, '', next), 400);
       return next;
@@ -751,6 +804,7 @@ export default function App() {
       next.players[prev.turn].walls--;
       consumeActiveMole(next.players[prev.turn]);
       advanceTurn(next);
+      next.skillFxBroadcast = undefined;
       if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, 'playing');
       return next;
     });
@@ -798,7 +852,18 @@ export default function App() {
     }
     consumeActiveMole(next.players[gs.turn]);
     advanceTurn(next);
-    if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, 'playing');
+    const digSeq = Date.now() * 1000 + (++skillFxSeqRef.current % 10000);
+    lastSentSkillFxSeqRef.current = digSeq;
+    const digBroadcast = {
+      actorIdx: gs.turn,
+      actorPos,
+      preMs: SKILL_FX_PRE_MS.DIG,
+      postMs: SKILL_FX_POST_MS.DIG,
+      seq: digSeq,
+    };
+    if (isOnlineMode(mode) && onlineGameId) {
+      updateGameState(onlineGameId, { ...next, skillFxBroadcast: digBroadcast }, 'playing');
+    }
     setGameState(next);
 
     setSkillFx({ skill: 'DIG', phase: 'post', actorIdx, actorPos });
@@ -863,8 +928,25 @@ export default function App() {
       if (skill !== 'MOLE') consumeActiveMole(next.players[gs.turn]);
       advanceTurn(next);
     }
+    const fxSeq = Date.now() * 1000 + (++skillFxSeqRef.current % 10000);
+    lastSentSkillFxSeqRef.current = fxSeq;
+    const skillBroadcast = {
+      actorIdx,
+      actorPos,
+      target,
+      partnerPos,
+      opponents,
+      preMs: SKILL_FX_PRE_MS[skill],
+      postMs: SKILL_FX_POST_MS[skill],
+      seq: fxSeq,
+    };
     if (isOnlineMode(mode) && onlineGameId) {
-      updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
+      updateGameState(
+        onlineGameId,
+        { ...next, skillFxBroadcast: skillBroadcast },
+        isWin ? 'finished' : 'playing',
+        isWin ? session?.user?.id : undefined
+      );
     }
     setGameState(next);
     if (isWin) setTimeout(() => handleWinRef.current(winnerIdx, false, '', next), 400);
@@ -921,7 +1003,7 @@ export default function App() {
     if (data) {
       setOnlineGameId(gameId);
       setOnlineRole(slotIndex);
-      setGameState(state);
+      setGameState(stripSkillFxBroadcast(state as GameState));
       setHostedGameData(data);
       const pl = data.state?.pendingTeamLayout as OnlineTeamLayoutId | undefined;
       if (pl) setOnlineTeamLayout(pl);
@@ -980,7 +1062,7 @@ export default function App() {
     );
     setOnlineGameId(game.id);
     setOnlineRole(myRole);
-    setGameState(game.state);
+    setGameState(stripSkillFxBroadcast(game.state as GameState));
     setMaxPlayers(game.max_players ?? game.state?.playerCount ?? game.state?.players?.length ?? 2);
     setRejoinCandidate(null);
     await loadPlayerProfiles(game, session.user.id);

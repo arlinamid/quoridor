@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { SkillType } from '../game/logic';
 
 export interface SkillFxState {
-  skill: SkillType | 'DIG';
+  /** Online ellenfeleknek: semleges FX, nem lehet kiolvasni melyik skill volt. */
+  skill: SkillType | 'DIG' | 'HIDDEN';
   phase: 'pre' | 'post';
   actorIdx: number;
   actorPos: { r: number; c: number };
@@ -14,23 +15,26 @@ export interface SkillFxState {
   opponents?: Array<{ r: number; c: number }>;
 }
 
-export const SKILL_FX_PRE_MS: Record<SkillType | 'DIG', number> = {
+export const SKILL_FX_PRE_MS: Record<SkillType | 'DIG' | 'HIDDEN', number> = {
   TELEPORT: 500, HAMMER: 380, SKIP: 380, MOLE: 320,
   DYNAMITE: 550, SHIELD: 420, WALLS: 320, MAGNET: 480,
   TRAP: 380, SWAP: 480, DIG: 520,
+  HIDDEN: 480,
 };
 
-export const SKILL_FX_POST_MS: Record<SkillType | 'DIG', number> = {
+export const SKILL_FX_POST_MS: Record<SkillType | 'DIG' | 'HIDDEN', number> = {
   TELEPORT: 420, HAMMER: 480, SKIP: 380, MOLE: 320,
   DYNAMITE: 700, SHIELD: 480, WALLS: 320, MAGNET: 480,
   TRAP: 380, SWAP: 520, DIG: 650,
+  HIDDEN: 520,
 };
 
-const SKILL_COLORS: Record<SkillType | 'DIG', string> = {
+const SKILL_COLORS: Record<SkillType | 'DIG' | 'HIDDEN', string> = {
   TELEPORT: '#a78bfa', HAMMER: '#f97316', SKIP: '#38bdf8',
   MOLE: '#a3e635',    DYNAMITE: '#ef4444', SHIELD: '#22d3ee',
   WALLS: '#f0c866',   MAGNET: '#f472b6',  TRAP: '#fb923c',
   SWAP: '#34d399',    DIG: '#f0c866',
+  HIDDEN: '#c4a574',
 };
 
 interface Props {
@@ -357,6 +361,42 @@ export function SkillFxOverlay({ fx, cellPx: rawCellPx, gapPx: rawGapPx }: Props
           </>
         );
 
+      case 'HIDDEN':
+        return (
+          <>
+            {glow(ar, ac, 'gh-a', 2)}
+            {ring(ar, ac, 0, 2.2)}
+            {ring(ar, ac, 1, 2.2)}
+            {tp && (
+              <>
+                {glow(tp.r, tp.c, 'gh-t', 1.75)}
+                {ring(tp.r, tp.c, 0, 1.65)}
+              </>
+            )}
+            {pp && (
+              <>
+                {glow(pp.r, pp.c, 'gh-p', 1.75)}
+                {svgLayer(arc(ar, ac, pp.r, pp.c, true, 'hid-pre-arc'))}
+              </>
+            )}
+            {ops && ops.length > 0 && svgLayer(
+              ops.map((opp, i) => (
+                <motion.path
+                  key={`hid-pre-ln-${i}`}
+                  d={`M ${cxOf(ac)} ${cyOf(ar)} L ${cxOf(opp.c)} ${cyOf(opp.r)}`}
+                  stroke={color}
+                  strokeWidth={Math.max(1.2, px * 0.045)}
+                  fill="none"
+                  strokeDasharray="6 4"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ pathLength: 1, opacity: [0, 0.75, 0.45] }}
+                  transition={{ duration: 0.4, delay: i * 0.04, ease: 'easeOut' }}
+                />
+              ))
+            )}
+          </>
+        );
+
       default:
         return null;
     }
@@ -499,6 +539,34 @@ export function SkillFxOverlay({ fx, cellPx: rawCellPx, gapPx: rawGapPx }: Props
             {ring(ar, ac, 1, 3.3)}
             {ring(ar, ac, 2, 3.3)}
             {sparks(ar, ac, 9, 1.25, '#e8b830')}
+          </>
+        );
+
+      case 'HIDDEN':
+        return (
+          <>
+            {ring(ar, ac, 0, 2.6)}
+            {ring(ar, ac, 1, 2.6)}
+            {tp && (
+              <>
+                {glow(tp.r, tp.c, 'gh-t2', 2.5)}
+                {ring(tp.r, tp.c, 0, 2.4)}
+                {sparks(tp.r, tp.c, 7, 0.8)}
+              </>
+            )}
+            {pp && (
+              <>
+                {glow(pp.r, pp.c, 'gh-p2', 2.5)}
+                {sparks(pp.r, pp.c, 6, 0.75)}
+              </>
+            )}
+            {ops && ops.map((opp, i) => (
+              <React.Fragment key={`hid-post-${i}`}>
+                {ring(opp.r, opp.c, 0, 1.55, color)}
+              </React.Fragment>
+            ))}
+            {glow(ar, ac, 'gh-a2', 2.2)}
+            {sparks(ar, ac, 5, 0.65)}
           </>
         );
 
