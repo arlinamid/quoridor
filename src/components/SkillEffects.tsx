@@ -821,10 +821,9 @@ export function SkillEffects({ type, position, playerPosition, targetPosition, o
 export interface ScreenShakeProps {
   intensity?: 'light' | 'medium' | 'heavy';
   duration?: number;
-  children: React.ReactNode;
 }
 
-export function ScreenShake({ intensity = 'medium', duration = 0.3, children }: ScreenShakeProps) {
+export function ScreenShake({ intensity = 'medium', duration = 0.3 }: ScreenShakeProps) {
   const shakeValues = {
     light: { x: [-2, 2, -2, 2, 0], y: [-1, 1, -1, 1, 0] },
     medium: { x: [-4, 4, -4, 4, -2, 2, 0], y: [-2, 2, -2, 2, -1, 1, 0] },
@@ -836,9 +835,7 @@ export function ScreenShake({ intensity = 'medium', duration = 0.3, children }: 
       initial={{ x: 0, y: 0 }}
       animate={shakeValues[intensity]}
       transition={{ duration, times: Array.from({ length: shakeValues[intensity].x.length }, (_, i) => i / (shakeValues[intensity].x.length - 1)) }}
-      className="inline-block"
-    >
-      {children}
-    </motion.div>
+      className="fixed inset-0 pointer-events-none z-[9999]"
+    />
   );
 }

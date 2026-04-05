@@ -148,6 +148,8 @@ interface GameViewProps {
   onMenu: () => void;
   easterEgg?: { type: CollectibleType; x: number; y: number } | null;
   onEasterEggCollect?: () => void;
+  activeSkillEffect: { type: SkillType; position?: { r: number; c: number }; playerPosition?: { r: number; c: number }; targetPosition?: { r: number; c: number } } | null;
+  screenShake: 'light' | 'medium' | 'heavy' | null;
 }
 
 export function GameView({
@@ -157,9 +159,8 @@ export function GameView({
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
   boardViewerIndex, trapHitFlash,
   easterEgg, onEasterEggCollect,
+  activeSkillEffect, screenShake,
 }: GameViewProps) {
-  const [activeSkillEffect, setActiveSkillEffect] = useState<{ type: SkillEffectType; position?: { r: number; c: number }; playerPosition?: { r: number; c: number }; targetPosition?: { r: number; c: number } } | null>(null);
-  const [screenShake, setScreenShake] = useState<'light' | 'medium' | 'heavy' | null>(null);
   
   const playerCount = gameState.players.length;
   const botPlayers = gameState.botPlayers ?? [];
@@ -361,15 +362,19 @@ export function GameView({
 
       <div className="h-6 text-sm text-[#f0c866] animate-pulse text-center">{statusMsg}</div>
 
+      {/* Screen Shake Effect */}
+      {screenShake && (
+        <ScreenShake intensity={screenShake} />
+      )}
+
       {/* Skill Effects Overlay */}
       {activeSkillEffect && (
         <SkillEffects
-          type={activeSkillEffect.type}
+          type={activeSkillEffect.type as SkillEffectType}
           position={activeSkillEffect.position}
           playerPosition={activeSkillEffect.playerPosition}
           targetPosition={activeSkillEffect.targetPosition}
           cellSize={44}
-          onComplete={() => setActiveSkillEffect(null)}
         />
       )}
 

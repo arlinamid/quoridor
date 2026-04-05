@@ -1055,6 +1055,8 @@ export default function App() {
               }}
               easterEgg={activeEgg}
               onEasterEggCollect={collect}
+              activeSkillEffect={activeSkillEffect}
+              screenShake={screenShake}
             />
           )}
           {view === 'leaderboard' && (
