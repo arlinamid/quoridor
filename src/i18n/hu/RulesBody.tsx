@@ -96,7 +96,7 @@ export function RulesScrollableContent() {
         </h3>
         <ul className="list-disc list-inside space-y-2 ml-4 leading-relaxed">
           <li>A pályán <strong>?</strong> jelű kincsek jelennek meg; a győzelmi szabály ugyanaz (célvonal).</li>
-          <li>Ha a saját körödben a bábud <strong>rákövetkező lépéssel vagy akcióval</strong> a kincs mezőjén áll, <strong>Ásás</strong> gombbal kincset kutathatsz: <strong>véletlen speciális képesség</strong> kerül a készletedbe — ha van hely (max. <strong>2</strong> skill a készleten ebben a módban a kódban; tele készlet esetén üzenetet kapsz).</li>
+          <li>Ha a bábud <strong>kincs mezőjén áll</strong> a saját körödben: <strong>érintsd meg újra ugyanazt a mezőt</strong>, ha ki szeretnéd ásni — <strong>véletlen speciális képesség</strong> kerül a készletedbe (ha van hely; tele készletnél üzenet). Ha inkább <strong>máshova lépsz</strong> vagy falat raksz, az ásás <strong>kimarad</strong>, a kincs a táblán marad.</li>
           <li><strong>Csapdák</strong> csak kincsmódban: üres mezőre helyezhetők; az ellenfélnek rejtettek; rálépéskor vagy oda kerüléskor <strong>visszakerülsz a saját startmeződre</strong>.</li>
         </ul>
       </section>

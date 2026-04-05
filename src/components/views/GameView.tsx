@@ -185,8 +185,16 @@ export function GameView({
 
   const isLocalTurn = canActPlayer(gameState.turn);
   const treasureInvCap = maxTreasureInventorySlots(profile.level ?? 1);
-  const turnInventoryLen = gameState.players[gameState.turn]?.inventory?.length ?? 0;
-  const canDigTreasure = turnInventoryLen < treasureInvCap;
+  const turnInvLen = gameState.players[gameState.turn]?.inventory?.length ?? 0;
+  const canDigTreasure = turnInvLen < treasureInvCap;
+  const onTreasureCell =
+    Boolean(
+      gameState.treasures?.some(
+        t =>
+          t.r === gameState.players[gameState.turn].r &&
+          t.c === gameState.players[gameState.turn].c
+      )
+    );
 
   return (
     <motion.div
@@ -260,25 +268,13 @@ export function GameView({
         onSkillTarget={onSkillTarget}
         boardViewerIndex={boardViewerIndex}
         trapHitFlash={trapHitFlash}
+        onTreasureDig={isTreasureMode(mode) && isLocalTurn ? onDig : undefined}
+        treasureDigHighlight={canDigTreasure && onTreasureCell}
       />
 
-      {/* Treasure mode: dig + skills */}
+      {/* Treasure mode: skills */}
       {isTreasureMode(mode) && (
         <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-3">
-          {isLocalTurn &&
-           canDigTreasure &&
-           gameState.treasures?.some(t =>
-             t.r === gameState.players[gameState.turn].r &&
-             t.c === gameState.players[gameState.turn].c
-           ) && (
-            <button
-              onClick={onDig}
-              className="bg-[#e8b830] text-[#1a0f0a] font-bold px-6 py-2 rounded-md text-sm hover:bg-[#f0c866] transition-all shadow-[0_0_15px_rgba(232,184,48,0.4)]"
-            >
-              {hu.game.digButton}
-            </button>
-          )}
-
           {/* Skill rows per player */}
           <div className="flex flex-col gap-2 w-full">
             {gameState.players.map((pl, pi) => {

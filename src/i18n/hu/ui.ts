@@ -117,6 +117,8 @@ export const hu = {
   game: {
     turnOf: (label: string) => `${label} köre`,
     digButton: '⛏️ Kincs kiásása (1 kör)',
+    /** Tooltip: saját kincsmező, koppintás = ásás */
+    digTapOwnCellHint: 'Koppints ide a kincs kiásásához. Máshova lépve kihagyod.',
     wallModeOn: 'Fal lerakása',
     wallOrientH: '↔ Vízszintes',
     wallOrientV: '↕ Függőleges',

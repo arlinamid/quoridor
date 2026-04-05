@@ -696,9 +696,13 @@ export default function App() {
 
   const executeDig = useCallback(() => {
     const cap = maxTreasureInventorySlots(profile.level);
-    const actor = gameStateRef.current.players[gameStateRef.current.turn];
+    const gs = gameStateRef.current;
+    const actor = gs.players[gs.turn];
     if ((actor.inventory?.length ?? 0) >= cap) {
       setStatusMsg(hu.app.digInventoryFull);
+      return;
+    }
+    if (!gs.treasures?.some(t => t.r === actor.r && t.c === actor.c)) {
       return;
     }
     setAnimating(true);

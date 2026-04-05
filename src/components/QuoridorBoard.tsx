@@ -4,6 +4,7 @@ import { Crosshair } from 'lucide-react';
 import { GameState, v2w, getValidMoves, isValidWall, Wall, SkillType, isValidTrapPlacement, viewerSeesTrapMarker } from '../game/logic';
 import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
+import { hu } from '../i18n/hu/ui';
 
 interface BoardProps {
   state: GameState;
@@ -18,12 +19,18 @@ interface BoardProps {
   /** null: helyi képernyő — mindenki látja a csapda ikonokat; egyébként csak saját/csapat csapdák. */
   boardViewerIndex?: number | null;
   trapHitFlash?: { r: number; c: number } | null;
+  /** Kincsmód: saját mezőre koppintás = ásás (ha kincs alattad), ha máshova lépsz, az ásás kimarad. */
+  onTreasureDig?: () => void;
+  /** Ha false, nincs arany kiemelés (pl. tele a skill-slot), de a koppintás továbbra is jelezhet. */
+  treasureDigHighlight?: boolean;
 }
 
 export function QuoridorBoard({
   state, wallMode, wallOrient, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget,
   boardViewerIndex = null,
   trapHitFlash = null,
+  onTreasureDig,
+  treasureDigHighlight = true,
 }: BoardProps) {
   const n = state.playerCount ?? state.players.length;
   // 3-4 player: same min as 2-player (fits mobile), higher vw% and max for desktop
@@ -137,6 +144,19 @@ export function QuoridorBoard({
     }
 
     if (wallMode) return;
+
+    if (state.treasureMode && onTreasureDig) {
+      const p = state.players[state.turn];
+      if (
+        p.r === r &&
+        p.c === c &&
+        state.treasures?.some(t => t.r === r && t.c === c)
+      ) {
+        onTreasureDig();
+        return;
+      }
+    }
+
     if (validMoves.find(m => m.r === r && m.c === c)) {
       onMove(r, c);
     }
@@ -171,6 +191,16 @@ export function QuoridorBoard({
           }
 
           const hasTreasure = state.treasureMode && state.treasures?.some(t => t.r === r && t.c === c);
+          const isOwnTreasureDig =
+            Boolean(
+              onTreasureDig &&
+                treasureDigHighlight &&
+                hasTreasure &&
+                !targetingSkill &&
+                !wallMode &&
+                r === state.players[state.turn].r &&
+                c === state.players[state.turn].c
+            );
           const hasTrap =
             state.treasureMode &&
             state.traps?.some(t => {
@@ -182,6 +212,7 @@ export function QuoridorBoard({
           cells.push(
             <div
               key={key}
+              title={isOwnTreasureDig ? hu.game.digTapOwnCellHint : undefined}
               className={cn(
                 cellCls, "bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center",
                 r === 8 && "shadow-[inset_0_-3px_0_#e74c3c]",
@@ -189,6 +220,7 @@ export function QuoridorBoard({
                 c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
                 c === 0 && "shadow-[inset_3px_0_0_#8e44ad]",
                 isValidMove ? "bg-[rgba(76,175,80,0.4)] cursor-pointer" :
+                isOwnTreasureDig ? "bg-[rgba(232,184,48,0.35)] cursor-pointer ring-2 ring-[#e8b830]/90 ring-offset-1 ring-offset-[#2a1810] shadow-[0_0_14px_rgba(232,184,48,0.45)]" :
                 isTrapTarget ? "bg-[rgba(251,146,60,0.45)] cursor-pointer shadow-[0_0_12px_rgba(251,146,60,0.55)]" :
                 isTeleportTarget ? "bg-[rgba(232,184,48,0.4)] cursor-pointer shadow-[0_0_10px_rgba(232,184,48,0.6)]" : "hover:bg-[#d4a87a] cursor-pointer"
               )}
