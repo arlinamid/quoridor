@@ -279,12 +279,13 @@ export const updateGameState = async (
   gameId: string,
   state: any,
   status: string = 'playing',
-  winnerId?: string,
+  /** Emberi győztes slot UUID; bot győzelemnél `null` (explicit); egyébként ne változtasd: `undefined`. */
+  winnerId?: string | null,
   patch?: { max_players?: number }
 ): Promise<{ error: PostgrestError | null }> => {
   if (!isSupabaseConfigured) return { error: null };
   const payload: any = { state, status };
-  if (winnerId) payload.winner_id = winnerId;
+  if (winnerId !== undefined) payload.winner_id = winnerId;
   if (patch?.max_players !== undefined) payload.max_players = patch.max_players;
   const { error } = await supabase.from('games').update(payload).eq('id', gameId);
   return { error };

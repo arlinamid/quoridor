@@ -81,6 +81,13 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ### Changed
 - **`App.tsx`** — lobby **Vissza**: host → `cancelGame`; joiner → `leaveWaitingGame`. **Online mód** újraválasztásakor, ha van **waiting** meccs a móddal egyezően → lobby visszaállítás (`findMyWaitingGame`), élő part közben továbbra is figyelmeztetés.
+- **`updateGameState`** (`supabase.ts`) — `winner_id` csak ha a paraméter **nem** `undefined`; így **explicit `null`** is menthető (bot győzelem).
+
+### Fixed
+- **Online csapatmód + bot győzelem** — befejezéskor a `winner_id` eddig gyakran a **vezérlő kliens** (`session.user.id`, pl. host) UUID-je volt, nem a győztes bábu slotjáé; a másik kliens rossz `winSlot`-ot számolt, ezért pl. **„A másik csapat győzött”** jelent meg a csapattársnak, ha a **bot** ért célba. Most: **`dbWinnerUserIdForSlot`** — emberi győztesre slot UUID, botra **`null`**; Realtime **`finished`** esetén, ha nincs egyező `winner_id`, **`hasWon`** a szinkron **`state`**-ből adja a győztes indexet.
+
+### Tests
+- **`dbWinnerUserIdForSlot`** (`onlineLobby.test.ts`).
 
 ### Ops
 - **Éles DB** — migráció feltöltve: `npx supabase db push --linked --yes` (2026-04-05).

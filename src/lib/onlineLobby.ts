@@ -64,3 +64,19 @@ export function waitingRowHasFreeJoinSlot(
 ): boolean {
   return firstEmptyJoinSlot(row, maxPlayers) !== null;
 }
+
+/**
+ * Online meccs `winner_id` mező: a győztes **emberi** slot UUID-ja, vagy `null` ha bot nyert.
+ * Ne a vezérlő kliens `session.user.id`-ját írd — különben a másik játékos rossz győztes slotot kap Realtime-ból.
+ */
+export function dbWinnerUserIdForSlot(
+  row: GameRowSlots | null | undefined,
+  winnerPlayerIndex: number,
+  botPlayers?: number[] | null
+): string | null {
+  if (winnerPlayerIndex < 0 || winnerPlayerIndex >= SLOT_IDS.length) return null;
+  if (botPlayers?.includes(winnerPlayerIndex)) return null;
+  const field = SLOT_IDS[winnerPlayerIndex];
+  const uid = row?.[field];
+  return typeof uid === 'string' ? uid : null;
+}

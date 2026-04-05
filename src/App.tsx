@@ -24,7 +24,7 @@ import { CollectibleType } from './lib/types';
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { GameMode, View, isOnlineMode, isAIMode, usesTreasureRules, isBattlefieldMode } from './lib/types';
-import { countFilledOnlineSlots, filterBotSlotsForPlayerCount, waitingGameRowMatchesMode } from './lib/onlineLobby';
+import { countFilledOnlineSlots, dbWinnerUserIdForSlot, filterBotSlotsForPlayerCount, waitingGameRowMatchesMode } from './lib/onlineLobby';
 import { AuthView } from './components/views/AuthView';
 import { MenuView } from './components/views/MenuView';
 import { LobbyView } from './components/views/LobbyView';
@@ -431,11 +431,15 @@ export default function App() {
           }
         }
         if (g.status === 'finished' && !showWinRef.current) {
-          // Find winner slot by matching winner_id against all player slots
+          // Find winner slot: DB winner_id (human), else táblaállapot (bot / régi kliens)
           const slots = [g.player1_id, g.player2_id, g.player3_id, g.player4_id];
-          const winSlot = slots.findIndex((uid: string | null) => uid === g.winner_id);
+          let winSlot = slots.findIndex((uid: string | null) => uid === g.winner_id);
           const snap = g.state && typeof g.state === 'object' ? (g.state as GameState) : undefined;
-          handleWin(winSlot !== -1 ? winSlot : onlineRole, true, '', snap);
+          if (winSlot === -1 && snap?.players?.length) {
+            const idx = snap.players.findIndex(p => hasWon(p));
+            if (idx !== -1) winSlot = idx;
+          }
+          handleWin(winSlot !== -1 ? winSlot : onlineRoleRef.current, true, '', snap);
         }
         if (g.status === 'abandoned') {
           resetOnlineSessionAfterMatch();
@@ -824,7 +828,12 @@ export default function App() {
         advanceTurn(next);
       }
       next.skillFxBroadcast = undefined;
-      if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
+      if (isOnlineMode(mode) && onlineGameId) {
+        const finishWid = isWin
+          ? dbWinnerUserIdForSlot(hostedGameDataRef.current, prev.turn, next.botPlayers)
+          : undefined;
+        updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', finishWid);
+      }
       if (isWin) setTimeout(() => handleWinRef.current(prev.turn, false, '', next), 400);
       return next;
     });
@@ -977,11 +986,14 @@ export default function App() {
       seq: fxSeq,
     };
     if (isOnlineMode(mode) && onlineGameId) {
+      const finishWid = isWin
+        ? dbWinnerUserIdForSlot(hostedGameDataRef.current, winnerIdx, next.botPlayers)
+        : undefined;
       updateGameState(
         onlineGameId,
         { ...next, skillFxBroadcast: skillBroadcast },
         isWin ? 'finished' : 'playing',
-        isWin ? session?.user?.id : undefined
+        finishWid
       );
     }
     setGameState(next);
