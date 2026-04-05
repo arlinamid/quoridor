@@ -13,9 +13,14 @@ export function useEasterEggSpawner(
 ) {
   const [activeEgg, setActiveEgg] = useState<{ type: CollectibleType; x: number; y: number } | null>(null);
   const lastSpawnAttemptRef = useRef(0);
+  /** Guard against double-click / rapid re-entry before React re-renders. */
+  const collectingRef = useRef(false);
 
   useEffect(() => {
-    if (!active) lastSpawnAttemptRef.current = 0;
+    if (!active) {
+      lastSpawnAttemptRef.current = 0;
+      collectingRef.current = false;
+    }
   }, [active]);
 
   const trySpawn = useCallback(() => {
@@ -28,18 +33,24 @@ export function useEasterEggSpawner(
     const x = 15 + Math.random() * 70;
     const y = 20 + Math.random() * 55;
     setActiveEgg({ type, x, y });
+    collectingRef.current = false; // reset guard for new egg
   }, [active, activeEgg]);
 
   const collect = useCallback(() => {
-    if (!activeEgg) return;
-    onCollect(activeEgg.type);
-    setActiveEgg(null);
+    // Prevent duplicate collection: ignore if already in-flight or no egg present
+    if (!activeEgg || collectingRef.current) return;
+    collectingRef.current = true;
+    setActiveEgg(null); // remove from UI immediately
+    onCollect(activeEgg.type); // async — errors are handled upstream
   }, [activeEgg, onCollect]);
 
-  // Auto-dismiss after 8 seconds
+  // Auto-dismiss after 8 seconds (no collection reward for expired eggs)
   useEffect(() => {
     if (!activeEgg) return;
-    const t = setTimeout(() => setActiveEgg(null), 8000);
+    const t = setTimeout(() => {
+      setActiveEgg(null);
+      collectingRef.current = false;
+    }, 8000);
     return () => clearTimeout(t);
   }, [activeEgg]);
 

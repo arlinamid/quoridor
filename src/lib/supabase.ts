@@ -290,6 +290,12 @@ export const getLocalSkillLoadout = (): import('../game/logic').SkillType[] | nu
 /**
  * Collect an Easter egg: adds to wallet balance + history log.
  * Returns updated profile fields so App.tsx can do a single setProfile().
+ *
+ * Throws a typed error string when the server rejects the request:
+ *   'rate_limited'  — collected another egg within the last 25 seconds
+ *   'daily_limit'   — reached the 8-egg daily cap
+ *   'invalid'       — unknown egg type (should never happen client-side)
+ *   'unauthorized'  — user ID mismatch (tampering attempt)
  */
 export const collectEasterEgg = async (
   userId: string | null,
@@ -298,19 +304,32 @@ export const collectEasterEgg = async (
   const newItem: import('./types').CollectedItem = { type: eggType, collectedAt: new Date().toISOString() };
 
   if (!isSupabaseConfigured || !userId) {
-    // localStorage fallback
+    // localStorage fallback — apply a basic client-side rate limit (25 s)
+    const history = getLocalCollectedItems();
+    const lastTs = history.length > 0
+      ? new Date(history[history.length - 1].collectedAt).getTime()
+      : 0;
+    if (Date.now() - lastTs < 25_000) throw new Error('rate_limited');
+
     const wallet = getLocalEggWallet();
     wallet[eggType] = (wallet[eggType] ?? 0) + 1;
     localStorage.setItem(LOCAL_WALLET_KEY, JSON.stringify(wallet));
-    const history = getLocalCollectedItems();
     history.push(newItem);
     localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(history));
     return { egg_wallet: wallet, collected_items: history };
   }
 
-  // Server: atomic update via RPC (adds to wallet + appends to collected_items history)
-  await supabase.rpc('add_egg_to_wallet', { p_user_id: userId, p_egg_type: eggType });
-  // Re-fetch updated profile fields
+  // Server: atomic update via RPC with full anti-cheat validation
+  const { data: status, error } = await supabase.rpc('add_egg_to_wallet', {
+    p_user_id: userId,
+    p_egg_type: eggType,
+  });
+
+  if (error) throw new Error(error.message);
+  // status is the TEXT return value of the new RPC
+  if (status && status !== 'ok') throw new Error(status as string);
+
+  // Re-fetch updated profile fields (source of truth is always the server)
   const { data } = await supabase
     .from('profiles')
     .select('egg_wallet, collected_items')

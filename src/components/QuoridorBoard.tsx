@@ -359,7 +359,7 @@ export function QuoridorBoard({
           style={gridCssVars}
         >
           {renderGrid()}
-          
+
           {/* Pawns */}
           {state.players.map((p, i) => {
             const color = PLAYER_COLORS[i];
@@ -400,10 +400,25 @@ export function QuoridorBoard({
             </motion.div>
           )}
 
+          {/* Skill / dig FX overlay — spans the full 17×17 grid as a proper
+              grid item so its coordinates are guaranteed to match cell positions.
+              position:relative lets children use absolute coords within it. */}
           {skillFx && (
-            <SkillFxOverlay fx={skillFx} cellPx={cellPx} gapPx={gapPx} />
+            <div
+              style={{
+                gridRow: '1 / 18',
+                gridColumn: '1 / 18',
+                position: 'relative',
+                zIndex: 28,
+                pointerEvents: 'none',
+                overflow: 'visible',
+              }}
+            >
+              <SkillFxOverlay fx={skillFx} cellPx={cellPx} gapPx={gapPx} />
+            </div>
           )}
         </div>
+
       </div>
     </div>
   );
