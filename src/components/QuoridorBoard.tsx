@@ -18,7 +18,6 @@ const WIDTH_UNITS = 9 + 8 * GAP_TO_CELL;
 interface BoardProps {
   state: GameState;
   wallMode: boolean;
-  wallOrient: 'h' | 'v';
   onMove: (r: number, c: number) => void;
   onWallPlace: (r: number, c: number, orient: 'h' | 'v') => void;
   animating: boolean;
@@ -37,7 +36,7 @@ interface BoardProps {
 }
 
 export function QuoridorBoard({
-  state, wallMode, wallOrient, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget,
+  state, wallMode, onMove, onWallPlace, animating, disabled, targetingSkill, onSkillTarget,
   boardViewerIndex = null,
   trapHitFlash = null,
   onTreasureDig,
@@ -143,7 +142,7 @@ export function QuoridorBoard({
       setHoveredWall(null);
       return;
     }
-    const wp = wallFromGapVisual(vr, vc, wallOrient);
+    const wp = wallFromGapVisual(vr, vc, 'h');
     if (wp) setHoveredWall(wp);
   };
 
@@ -163,9 +162,9 @@ export function QuoridorBoard({
       return;
     }
 
-    const wpDyn = v2w(vr, vc, wallOrient);
-
     if (targetingSkill === 'DYNAMITE') {
+      // Saroknál 'h'-t próbál először, majd 'v'-t — nem-saroknál wallFromGapVisual auto-detektál
+      const wpDyn = wallFromGapVisual(vr, vc, 'h') ?? wallFromGapVisual(vr, vc, 'v');
       if (wpDyn && onSkillTarget) {
         onSkillTarget(wpDyn.r, wpDyn.c);
       }
@@ -184,24 +183,19 @@ export function QuoridorBoard({
       return true;
     };
 
-    // Fal nélküli mód: réskattintás is lerakhat falat, kivéve a „lépés vs fal” ütközést a bábu mellett.
-    if (!wallMode) {
-      if (isGapBetweenPlayerAndValidMove(state, vr, vc)) return;
-      const isCorner = vr % 2 === 1 && vc % 2 === 1;
-      if (isCorner) {
-        for (const o of ['h', 'v'] as const) {
-          const w = v2w(vr, vc, o);
-          if (w && tryPlace(w)) return;
-        }
-        return;
+    // Mindkét módban: saroknál mindkét irányt megpróbálja (h elsőként), nem-saroknál a geometria dönt.
+    const isCorner = vr % 2 === 1 && vc % 2 === 1;
+    if (!wallMode && isGapBetweenPlayerAndValidMove(state, vr, vc)) return;
+
+    if (isCorner) {
+      for (const o of ['h', 'v'] as const) {
+        const w = v2w(vr, vc, o);
+        if (w && tryPlace(w)) return;
       }
-      const wp = wallFromGapVisual(vr, vc, wallOrient);
-      if (wp) tryPlace(wp);
       return;
     }
 
-    // Fal-mód: saroknál a Forgatás; H/V sávnál a geometria (nem lehet eltéveszteni az irányt).
-    const wp = wallFromGapVisual(vr, vc, wallOrient);
+    const wp = wallFromGapVisual(vr, vc, 'h'); // nem-saroknál az irány geometriából adódik
     if (wp) tryPlace(wp);
   };
 

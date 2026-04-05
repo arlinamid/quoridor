@@ -125,7 +125,6 @@ interface GameViewProps {
   gameState: GameState;
   mode: GameMode;
   wallMode: boolean;
-  wallOrient: 'h' | 'v';
   animating: boolean;
   statusMsg: string;
   targetingSkill: SkillType | null;
@@ -134,7 +133,6 @@ interface GameViewProps {
   profile: Profile;
   playerProfiles: Record<number, Profile>;
   onToggleWallMode: () => void;
-  onToggleWallOrient: () => void;
   onMove: (r: number, c: number) => void;
   onWallPlace: (r: number, c: number, orient: 'h' | 'v') => void;
   onSkillTarget: (r: number, c: number) => void;
@@ -152,9 +150,9 @@ interface GameViewProps {
 }
 
 export function GameView({
-  gameState, mode, wallMode, wallOrient, animating, statusMsg, targetingSkill,
+  gameState, mode, wallMode, animating, statusMsg, targetingSkill,
   timeLeft, onlineRole, profile, playerProfiles,
-  onToggleWallMode, onToggleWallOrient, onMove, onWallPlace, onSkillTarget,
+  onToggleWallMode, onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
   boardViewerIndex, trapHitFlash, skillFx,
   easterEgg, onEasterEggCollect,
@@ -259,7 +257,7 @@ export function GameView({
         <QuoridorBoard
           state={gameState}
           wallMode={wallMode}
-          wallOrient={wallOrient}
+
           onMove={onMove}
           onWallPlace={onWallPlace}
           animating={animating}
@@ -334,14 +332,6 @@ export function GameView({
         >
           {hu.game.wallModeOn}
         </button>
-        {wallMode && (
-          <button
-            onClick={onToggleWallOrient}
-            className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"
-          >
-            {wallOrient === 'h' ? hu.game.wallOrientH : hu.game.wallOrientV}
-          </button>
-        )}
         <button
           onClick={onNewGame}
           className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"

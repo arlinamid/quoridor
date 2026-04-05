@@ -37,7 +37,6 @@ export default function App() {
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [gameState, setGameState] = useState<GameState>(initState());
   const [wallMode, setWallMode] = useState(false);
-  const [wallOrient, setWallOrient] = useState<'h' | 'v'>('h');
   const [animating, setAnimating] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [targetingSkill, setTargetingSkill] = useState<SkillType | null>(null);
@@ -641,7 +640,7 @@ export default function App() {
     // Use current loadout from ref to avoid stale closure
     const currentLoadout = skillLoadoutRef.current;
     setGameState(initState(isTreasureMode(selectedMode), 2, currentLoadout.length > 0 ? currentLoadout : undefined));
-    setWallMode(false); setWallOrient('h'); setAnimating(false); setTimeLeft(120);
+    setWallMode(false); setAnimating(false); setTimeLeft(120);
     setView('game');
   }, [onlineGameId]);
 
@@ -1027,7 +1026,6 @@ export default function App() {
               gameState={gameState}
               mode={mode}
               wallMode={wallMode}
-              wallOrient={wallOrient}
               animating={animating}
               statusMsg={statusMsg}
               targetingSkill={targetingSkill}
@@ -1039,7 +1037,6 @@ export default function App() {
               trapHitFlash={trapHitFlash}
               skillFx={skillFx}
               onToggleWallMode={() => setWallMode(w => !w)}
-              onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')}
               onMove={executeMove}
               onWallPlace={executeWall}
               onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })}
