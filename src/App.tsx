@@ -29,6 +29,7 @@ import { LobbyView } from './components/views/LobbyView';
 import { LeaderboardView } from './components/views/LeaderboardView';
 import { GameView } from './components/views/GameView';
 import { hu } from './i18n/hu/ui';
+import { SkillFxState, SKILL_FX_PRE_MS, SKILL_FX_POST_MS } from './components/SkillFxOverlay';
 
 export default function App() {
   const [view, setView] = useState<View>('auth');
@@ -41,6 +42,7 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState('');
   const [targetingSkill, setTargetingSkill] = useState<SkillType | null>(null);
   const [trapHitFlash, setTrapHitFlash] = useState<{ r: number; c: number } | null>(null);
+  const [skillFx, setSkillFx] = useState<SkillFxState | null>(null);
   const [showWin, setShowWin] = useState(false);
   const [winReason, setWinReason] = useState('');
   const [winnerIdx, setWinnerIdx] = useState(0);
@@ -623,7 +625,7 @@ export default function App() {
       alert(hu.app.alertOnlineStuck);
       return;
     }
-    setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null); setTrapHitFlash(null);
+    setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null); setTrapHitFlash(null); setSkillFx(null);
     if (difficulty) setAiDifficulty(difficulty);
     if (isOnlineMode(selectedMode)) {
       setMode(selectedMode);
@@ -694,7 +696,7 @@ export default function App() {
     setTimeout(() => setAnimating(false), 350);
   }, [mode, onlineGameId]);
 
-  const executeDig = useCallback(() => {
+  const executeDig = useCallback(async () => {
     const cap = maxTreasureInventorySlots(profile.level);
     const gs = gameStateRef.current;
     const actor = gs.players[gs.turn];
@@ -705,90 +707,124 @@ export default function App() {
     if (!gs.treasures?.some(t => t.r === actor.r && t.c === actor.c)) {
       return;
     }
+
+    const actorIdx = gs.turn;
+    const actorPos = { r: actor.r, c: actor.c };
+
     setAnimating(true);
-    setGameState(prev => {
-      const next = cloneS(prev);
-      const p = next.players[next.turn];
-      const innerCap = maxTreasureInventorySlots(profile.level);
-      const tIdx = next.treasures?.findIndex(t => t.r === p.r && t.c === p.c);
-      if (tIdx !== undefined && tIdx !== -1) {
-        const SKILLS: SkillType[] = ['TELEPORT', 'HAMMER', 'SKIP', 'MOLE', 'DYNAMITE', 'SHIELD', 'WALLS', 'MAGNET', 'TRAP', 'SWAP'];
-        if (!p.inventory) p.inventory = [];
-        const have = new Set(p.inventory);
-        const pool = SKILLS.filter(s => !have.has(s));
-        const found = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : undefined;
-        if (found && p.inventory.length < innerCap) {
-          next.treasures!.splice(tIdx, 1);
-          p.inventory.push(found);
-          setStatusMsg(hu.app.digFound(found));
-        } else if (!found) {
-          setStatusMsg(hu.app.digDuplicateTypes);
-        } else {
-          setStatusMsg(hu.app.digInventoryFull);
-        }
+    setSkillFx({ skill: 'DIG', phase: 'pre', actorIdx, actorPos });
+    await new Promise<void>(res => setTimeout(res, SKILL_FX_PRE_MS['DIG']));
+
+    const next = cloneS(gs);
+    const p = next.players[next.turn];
+    const innerCap = maxTreasureInventorySlots(profile.level);
+    const tIdx = next.treasures?.findIndex(t => t.r === p.r && t.c === p.c);
+    if (tIdx !== undefined && tIdx !== -1) {
+      const SKILLS: SkillType[] = ['TELEPORT', 'HAMMER', 'SKIP', 'MOLE', 'DYNAMITE', 'SHIELD', 'WALLS', 'MAGNET', 'TRAP', 'SWAP'];
+      if (!p.inventory) p.inventory = [];
+      const have = new Set(p.inventory);
+      const pool = SKILLS.filter(s => !have.has(s));
+      const found = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : undefined;
+      if (found && p.inventory.length < innerCap) {
+        next.treasures!.splice(tIdx, 1);
+        p.inventory.push(found);
+        setStatusMsg(hu.app.digFound(found));
+      } else if (!found) {
+        setStatusMsg(hu.app.digDuplicateTypes);
+      } else {
+        setStatusMsg(hu.app.digInventoryFull);
       }
-      consumeActiveMole(next.players[prev.turn]);
-      advanceTurn(next);
-      if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, 'playing');
-      return next;
-    });
-    setTimeout(() => setAnimating(false), 350);
+    }
+    consumeActiveMole(next.players[gs.turn]);
+    advanceTurn(next);
+    if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, 'playing');
+    setGameState(next);
+
+    setSkillFx({ skill: 'DIG', phase: 'post', actorIdx, actorPos });
+    await new Promise<void>(res => setTimeout(res, SKILL_FX_POST_MS['DIG']));
+    setSkillFx(null);
+    setAnimating(false);
   }, [mode, onlineGameId, profile.level]);
 
-  const executeSkill = useCallback((skill: SkillType, target?: { r: number; c: number }) => {
-    let skillApplyFailed = false;
-    setAnimating(true);
-    setGameState(prev => {
-      const res = applySkill(prev, skill, target);
-      if (res.applied === false) {
-        skillApplyFailed = true;
-        return prev;
-      }
-      const next = res.state;
-      if (skill === 'TELEPORT' || skill === 'SWAP' || skill === 'MAGNET') {
-        for (let pi = 0; pi < next.players.length; pi++) {
-          const pawn = next.players[pi];
-          const ti = next.traps?.findIndex(t => t.r === pawn.r && t.c === pawn.c && trapAffectsVictim(next, t.owner, pi));
-          if (ti !== undefined && ti !== -1) {
-            const hitR = pawn.r;
-            const hitC = pawn.c;
-            next.traps!.splice(ti, 1);
-            const sp = PLAYER_START[pi] ?? PLAYER_START[0];
-            pawn.r = sp.r;
-            pawn.c = sp.c;
-            setStatusMsg(pi === prev.turn ? hu.app.trapSteppedShort : hu.app.trapOther);
-            queueMicrotask(() => setTrapHitFlash({ r: hitR, c: hitC }));
-          }
-        }
-      }
-      const winnerIdx = next.players.findIndex((p) => hasWon(p));
-      const isWin = winnerIdx !== -1;
-      if (!isWin) {
-        if (skill !== 'MOLE') consumeActiveMole(next.players[prev.turn]);
-        advanceTurn(next);
-      }
-      if (isOnlineMode(mode) && onlineGameId) updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
-      if (isWin) setTimeout(() => handleWinRef.current(winnerIdx, false, '', next), 400);
-      return next;
-    });
-    if (skillApplyFailed) {
-      setAnimating(false);
+  const executeSkill = useCallback(async (skill: SkillType, target?: { r: number; c: number }) => {
+    const gs = gameStateRef.current;
+
+    // Early-exit validation (TRAP target check)
+    const res = applySkill(gs, skill, target);
+    if (res.applied === false) {
       if (skill === 'TRAP') setStatusMsg(hu.app.trapInvalid);
       return;
     }
+
+    const actorIdx = gs.turn;
+    const actorPos = { r: gs.players[actorIdx].r, c: gs.players[actorIdx].c };
+
+    // Build partner / opponents info for the FX layer
+    let partnerPos: { r: number; c: number } | undefined;
+    let opponents: Array<{ r: number; c: number }> | undefined;
+
+    if (skill === 'SWAP' && res.swapPartner !== undefined) {
+      const partner = gs.players[res.swapPartner];
+      partnerPos = { r: partner.r, c: partner.c };
+    }
+    if (skill === 'MAGNET' || skill === 'SKIP') {
+      opponents = gs.players
+        .map((p, i) => ({ i, r: p.r, c: p.c }))
+        .filter(({ i }) => i !== gs.turn)
+        .map(({ r, c }) => ({ r, c }));
+    }
+
+    setAnimating(true);
+    setSkillFx({ skill, phase: 'pre', actorIdx, actorPos, target, partnerPos, opponents });
+    await new Promise<void>(resolve => setTimeout(resolve, SKILL_FX_PRE_MS[skill]));
+
+    // Apply the pre-computed result
+    const next = res.state;
+    if (skill === 'TELEPORT' || skill === 'SWAP' || skill === 'MAGNET') {
+      for (let pi = 0; pi < next.players.length; pi++) {
+        const pawn = next.players[pi];
+        const ti = next.traps?.findIndex(t => t.r === pawn.r && t.c === pawn.c && trapAffectsVictim(next, t.owner, pi));
+        if (ti !== undefined && ti !== -1) {
+          const hitR = pawn.r;
+          const hitC = pawn.c;
+          next.traps!.splice(ti, 1);
+          const sp = PLAYER_START[pi] ?? PLAYER_START[0];
+          pawn.r = sp.r;
+          pawn.c = sp.c;
+          setStatusMsg(pi === gs.turn ? hu.app.trapSteppedShort : hu.app.trapOther);
+          queueMicrotask(() => setTrapHitFlash({ r: hitR, c: hitC }));
+        }
+      }
+    }
+    const winnerIdx = next.players.findIndex(p => hasWon(p));
+    const isWin = winnerIdx !== -1;
+    if (!isWin) {
+      if (skill !== 'MOLE') consumeActiveMole(next.players[gs.turn]);
+      advanceTurn(next);
+    }
+    if (isOnlineMode(mode) && onlineGameId) {
+      updateGameState(onlineGameId, next, isWin ? 'finished' : 'playing', isWin ? session?.user?.id : undefined);
+    }
+    setGameState(next);
+    if (isWin) setTimeout(() => handleWinRef.current(winnerIdx, false, '', next), 400);
+
     if (isTreasureMode(modeRef.current)) {
       const uid = sessionRef.current?.user?.id ?? null;
       const prof = profileRef.current;
       const owned = prof.owned_skills ?? getLocalOwnedSkills();
       const loadout = prof.skill_loadout ?? skillLoadoutRef.current;
-      void persistConsumedPurchasedSkill(uid, skill, owned, loadout).then((next) => {
-        if (!next) return;
-        setProfile(p => ({ ...p, owned_skills: next.owned_skills, skill_loadout: next.skill_loadout }));
-        setSkillLoadout(next.skill_loadout);
+      void persistConsumedPurchasedSkill(uid, skill, owned, loadout).then((n) => {
+        if (!n) return;
+        setProfile(p => ({ ...p, owned_skills: n.owned_skills, skill_loadout: n.skill_loadout }));
+        setSkillLoadout(n.skill_loadout);
       });
     }
     setTargetingSkill(null);
-    setTimeout(() => setAnimating(false), 350);
+
+    setSkillFx({ skill, phase: 'post', actorIdx, actorPos, target, partnerPos, opponents });
+    await new Promise<void>(resolve => setTimeout(resolve, SKILL_FX_POST_MS[skill]));
+    setSkillFx(null);
+    setAnimating(false);
   }, [mode, onlineGameId, session]);
 
   const handleCreateOnlineGame = async () => {
@@ -1001,6 +1037,7 @@ export default function App() {
               playerProfiles={playerProfiles}
               boardViewerIndex={isOnlineMode(mode) ? onlineRole : isAIMode(mode) ? 0 : null}
               trapHitFlash={trapHitFlash}
+              skillFx={skillFx}
               onToggleWallMode={() => setWallMode(w => !w)}
               onToggleWallOrient={() => setWallOrient(o => o === 'h' ? 'v' : 'h')}
               onMove={executeMove}

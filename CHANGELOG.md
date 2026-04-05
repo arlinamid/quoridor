@@ -2,7 +2,29 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
-**Éles:** **0.6.1** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.0** (2026-04-04).
+**Éles:** **0.6.2** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.1** (2026-04-05).
+
+---
+
+## [0.6.2] — 2026-04-05
+
+### Added
+- **Skill & Dig animációs overlay** (`SkillFxOverlay.tsx`) — minden skill és az ásás előtt **pre-effect** (töltő ragyogás, gyűrűk, SVG ívek, szikrák), utána **post-effect** (robbanás, sugárzás, részecskeszóró) játszik le Framer Motion + inline SVG alapon.
+  - **TELEPORT** — lila gyűrűk az indítónál + szaggatott ívelt pálya a célra; érkezésnél szikrarobbanás.
+  - **HAMMER** — narancs figyelmeztető pulzálás a megcélzott falon; törés-részecskék.
+  - **SKIP** — ciánkék háromszoros gyűrűhullám az aktiválótól kifelé.
+  - **MOLE** — lime zöld ragyogás + szikrák a játékos körül; utó-gyűrű.
+  - **DYNAMITE** — piros szikrafüzér (kanóc); három koncentrikus narancs-sárga robbanásgyűrű + 12 repülő részecske.
+  - **SHIELD** — ciánkék SVG-kör formálódik; utánna teli pajzs-körrel kifakul.
+  - **WALLS** — arany `+` ikonok úsznak fel; utó-kettős gyűrű.
+  - **MAGNET** — szaggatott vonal az összes ellenfélhez; utó-gyűrűk az ellenfeleknél.
+  - **TRAP** — narancs kettős gyűrű a célmezőn; utó-ragyogás.
+  - **SWAP** — zöld Bézier-ív a csere-partnerhez; utó-szikrabontás mindkét pozícióban.
+  - **DIG** — arany részecskeszóró + háromszoros gyűrű; utó csillag-robbanás.
+- **Pre/post timing** — `SKILL_FX_PRE_MS` / `SKILL_FX_POST_MS` per-skill konstansok (320–700 ms); `executeSkill` és `executeDig` mostantól **async**, az animáció lezárta után vált `animating: false`-ra.
+
+### Fixed
+- **Pajzs (SHIELD) skill** — az ellenfelel nem tudtak falat rakni a pajzsos játékos **3×3-as zónájába** (sem vízszintes, sem függőleges falat); korábban csak 2 konkrét vízszintes fal volt blokkolva, hibás player-index logikával. Az új ellenőrzés: `wr ∈ [r-2, r+1]` és `wc ∈ [c-2, c+1]` mindkét orientációra, minden játékszámra.
 
 ---
 

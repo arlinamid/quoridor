@@ -7,6 +7,7 @@ import {
   Shield, Plus, Magnet, Crosshair, ArrowLeftRight, Lock,
 } from 'lucide-react';
 import { GameState, SkillType, isTeamGameState, maxTreasureInventorySlots } from '../../game/logic';
+import { SkillFxState } from '../SkillFxOverlay';
 import { Profile } from '../../lib/supabase';
 import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/types';
 import { QuoridorBoard } from '../QuoridorBoard';
@@ -142,6 +143,7 @@ interface GameViewProps {
   /** null = helyi megosztott képernyő: mindenki látja a saját csapdáit jelölő ikont; szám = csak az adott szemszög (online / gép ellen). */
   boardViewerIndex: number | null;
   trapHitFlash: { r: number; c: number } | null;
+  skillFx?: SkillFxState | null;
   onDig: () => void;
   onNewGame: () => void;
   onMenu: () => void;
@@ -154,7 +156,7 @@ export function GameView({
   timeLeft, onlineRole, profile, playerProfiles,
   onToggleWallMode, onToggleWallOrient, onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
-  boardViewerIndex, trapHitFlash,
+  boardViewerIndex, trapHitFlash, skillFx,
   easterEgg, onEasterEggCollect,
 }: GameViewProps) {
   const playerCount = gameState.players.length;
@@ -269,6 +271,7 @@ export function GameView({
           onSkillTarget={onSkillTarget}
           boardViewerIndex={boardViewerIndex}
           trapHitFlash={trapHitFlash}
+          skillFx={skillFx}
           onTreasureDig={isTreasureMode(mode) && isLocalTurn ? onDig : undefined}
           treasureDigHighlight={canDigTreasure && onTreasureCell}
         />

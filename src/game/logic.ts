@@ -457,15 +457,16 @@ export function isValidWall(s: GameState, wr: number, wc: number, o: 'h' | 'v') 
   const nw: Wall = { r: wr, c: wc, orient: o };
   for (const w of s.walls) if (wallsOverlap(w, nw)) return false;
 
-  // Shield check (2-player only)
-  if (s.players.length === 2) {
-    const opp = s.players[1 - s.turn];
-    const hasShield = opp.effects?.some(e => e.type === 'SHIELD' && e.duration > 0) || false;
-    if (hasShield && o === 'h') {
-      if (1 - s.turn === 0) {
-        if (wr === opp.r && (wc === opp.c || wc === opp.c - 1)) return false;
-      } else {
-        if (wr === opp.r - 1 && (wc === opp.c || wc === opp.c - 1)) return false;
+  // Shield check: block all walls in 3×3 zone around any shielded opponent
+  for (let i = 0; i < s.players.length; i++) {
+    if (i === s.turn) continue;
+    const opp = s.players[i];
+    const hasShield = opp.effects?.some(e => e.type === 'SHIELD' && e.duration > 0) ?? false;
+    if (hasShield) {
+      // A wall at (wr,wc) touches the 3×3 cell zone [opp.r-1..opp.r+1]×[opp.c-1..opp.c+1]
+      // iff wr ∈ [opp.r-2, opp.r+1] and wc ∈ [opp.c-2, opp.c+1] (valid for both h and v)
+      if (wr >= opp.r - 2 && wr <= opp.r + 1 && wc >= opp.c - 2 && wc <= opp.c + 1) {
+        return false;
       }
     }
   }

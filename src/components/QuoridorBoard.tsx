@@ -8,6 +8,7 @@ import {
 import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
 import { hu } from '../i18n/hu/ui';
+import { SkillFxOverlay, SkillFxState } from './SkillFxOverlay';
 
 /** Vízszintes / függőleges sáv: résvastagság / cella arány (korábbi 14px / 36px mobil cél). */
 const GAP_TO_CELL = 14 / 36;
@@ -31,6 +32,8 @@ interface BoardProps {
   onTreasureDig?: () => void;
   /** Ha false, nincs arany kiemelés (pl. tele a skill-slot), de a koppintás továbbra is jelezhet. */
   treasureDigHighlight?: boolean;
+  /** Skill / dig animációs overlay állapota. */
+  skillFx?: SkillFxState | null;
 }
 
 export function QuoridorBoard({
@@ -39,6 +42,7 @@ export function QuoridorBoard({
   trapHitFlash = null,
   onTreasureDig,
   treasureDigHighlight = true,
+  skillFx = null,
 }: BoardProps) {
   const measureRef = useRef<HTMLDivElement>(null);
   /** Pixelben: teljes 9×9 rács beférjen; c * WIDTH_UNITS ≈ szélesség, ugyanígy magasság. */
@@ -400,6 +404,10 @@ export function QuoridorBoard({
             >
               <Crosshair className="w-[55%] h-[55%] text-[#e74c3c] drop-shadow-[0_0_8px_rgba(0,0,0,0.9)]" strokeWidth={2.5} />
             </motion.div>
+          )}
+
+          {skillFx && (
+            <SkillFxOverlay fx={skillFx} cellPx={cellPx} gapPx={gapPx} />
           )}
         </div>
       </div>
