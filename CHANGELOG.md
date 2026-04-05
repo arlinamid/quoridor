@@ -2,7 +2,17 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
-**Éles:** **0.6.2** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.1** (2026-04-05).
+**Éles:** **0.6.3** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.2** (2026-04-05).
+
+---
+
+## [0.6.3] — 2026-04-05
+
+### Added
+- **Bábu skinek** — Áruház **„Bábu”** fül; tojásért vásárolható kinézetek (**`bunny_egg`** animált 9 képkocka ~5 FPS, **`bunny_idle`** egy képkocka). Profil: `owned_skins`, `equipped_skin_id`; távoli játékosnak látszik: `profiles_peer.equipped_skin_id`. RPC: `purchase_pawn_skin_with_eggs`, `set_equipped_pawn_skin` (migráció: `20260405200000_pawn_skins.sql`). Spriteok: `public/sprites/bunny/frame-01…09.png`, előnézet: `public/sprites/bunny/preview.html`; segédszkriptek: `scripts/extract_bunny_sheet.py`, `scripts/sprites_remove_white_bg.py`. **`Arlinamid`** felhasználónév: automatikus **`bunny_egg`** birtoklás + felvétel (lokális és Supabase profil).
+
+### Changed
+- **Kép-alapú bábu mérete a táblán** — a skinnel rajzolt bábu átmérője **~88%** a cella oldalához képest (`SKIN_PAWN_TO_CELL` a `QuoridorBoard.tsx`-ben); a klasszikus színes korong változatlanul **~61%**.
 
 ---
 
@@ -30,7 +40,7 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ## [Unreleased]
 
-_(Még nincs közzétett változás a következő verzióhoz.)_
+_(Következő kiadásig.)_
 
 ---
 

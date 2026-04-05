@@ -15,6 +15,8 @@ import { getPawnSkinMeta, pawnSkinFrameUrl } from '../lib/pawnSkins';
 const GAP_TO_CELL = 14 / 36;
 /** 9 oszlop cella + 8 függőleges rés → teljes szélesség = cella * ennyi. */
 const WIDTH_UNITS = 9 + 8 * GAP_TO_CELL;
+/** Kép-alapú bábu: átmérő / cella oldal (klasszikus korong: 0.61). */
+const SKIN_PAWN_TO_CELL = 0.88;
 
 interface BoardProps {
   state: GameState;
@@ -43,6 +45,7 @@ function PawnToken({
   color,
   skinId,
   pawnCls,
+  pawnSkinCls,
   gridRow,
   gridColumn,
 }: {
@@ -50,6 +53,7 @@ function PawnToken({
   color: string;
   skinId: string | null | undefined;
   pawnCls: string;
+  pawnSkinCls: string;
   gridRow: number;
   gridColumn: number;
 }) {
@@ -70,7 +74,7 @@ function PawnToken({
     return (
       <motion.div
         key={`pawn-${playerIndex}`}
-        className={cn(pawnCls, 'rounded-full z-20 pointer-events-none overflow-hidden border-2 border-solid')}
+        className={cn(pawnSkinCls, 'rounded-full z-20 pointer-events-none overflow-hidden border-2 border-solid')}
         layout
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         style={{
@@ -166,6 +170,7 @@ export function QuoridorBoard({
   const gapVCls = "w-[length:var(--qg)] h-[length:var(--qc)]";
   const gapBothCls = "w-[length:var(--qg)] h-[length:var(--qg)]";
   const pawnCls = "w-[length:var(--qp)] h-[length:var(--qp)]";
+  const pawnSkinCls = "w-[length:var(--qpsk)] h-[length:var(--qpsk)]";
 
   const gridCssVars = useMemo(
     () =>
@@ -173,6 +178,7 @@ export function QuoridorBoard({
         '--qc': `${cellPx}px`,
         '--qg': `${gapPx}px`,
         '--qp': `${Math.round(cellPx * 0.61 * 100) / 100}px`,
+        '--qpsk': `${Math.round(cellPx * SKIN_PAWN_TO_CELL * 100) / 100}px`,
       }) as React.CSSProperties,
     [cellPx, gapPx]
   );
@@ -448,6 +454,7 @@ export function QuoridorBoard({
                 color={color}
                 skinId={sid}
                 pawnCls={pawnCls}
+                pawnSkinCls={pawnSkinCls}
                 gridRow={p.r * 2 + 1}
                 gridColumn={p.c * 2 + 1}
               />
