@@ -45,6 +45,8 @@ export default function App() {
   const [winReason, setWinReason] = useState('');
   const [winnerIdx, setWinnerIdx] = useState(0);
   const [timeLeft, setTimeLeft] = useState(120);
+  const [activeSkillEffect, setActiveSkillEffect] = useState<{ type: SkillType; position?: { r: number; c: number }; playerPosition?: { r: number; c: number }; targetPosition?: { r: number; c: number } } | null>(null);
+  const [screenShake, setScreenShake] = useState<'light' | 'medium' | 'heavy' | null>(null);
 
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -733,7 +735,43 @@ export default function App() {
 
   const executeSkill = useCallback((skill: SkillType, target?: { r: number; c: number }) => {
     let skillApplyFailed = false;
+    
+    // Get current player position before applying skill
+    const currentPlayerPos = gameStateRef.current.players[gameStateRef.current.turn];
+    let targetPlayerPos: { r: number; c: number } | undefined;
+    let swapTargetPos: { r: number; c: number } | undefined;
+    
+    if (skill === 'SWAP' && target) {
+      // Find which player will be swapped with
+      const candidates = gameStateRef.current.players.map((_, i) => i).filter(i => i !== gameStateRef.current.turn);
+      if (candidates.length > 0) {
+        const k = candidates[Math.floor(Math.random() * candidates.length)];
+        swapTargetPos = gameStateRef.current.players[k];
+      }
+    }
+    
     setAnimating(true);
+    
+    // Trigger screen shake for powerful skills
+    if (skill === 'DYNAMITE') {
+      setScreenShake('heavy');
+      setTimeout(() => setScreenShake(null), 500);
+    } else if (skill === 'HAMMER') {
+      setScreenShake('medium');
+      setTimeout(() => setScreenShake(null), 300);
+    } else if (skill === 'MAGNET') {
+      setScreenShake('light');
+      setTimeout(() => setScreenShake(null), 400);
+    }
+    
+    // Set up skill effect animation
+    setActiveSkillEffect({
+      type: skill,
+      position: target ? { r: target.r, c: target.c } : undefined,
+      playerPosition: { r: currentPlayerPos.r, c: currentPlayerPos.c },
+      targetPosition: swapTargetPos,
+    });
+    
     setGameState(prev => {
       const res = applySkill(prev, skill, target);
       if (res.applied === false) {
@@ -769,6 +807,7 @@ export default function App() {
     });
     if (skillApplyFailed) {
       setAnimating(false);
+      setActiveSkillEffect(null);
       if (skill === 'TRAP') setStatusMsg(hu.app.trapInvalid);
       return;
     }
@@ -784,7 +823,10 @@ export default function App() {
       });
     }
     setTargetingSkill(null);
-    setTimeout(() => setAnimating(false), 350);
+    setTimeout(() => {
+      setAnimating(false);
+      setActiveSkillEffect(null);
+    }, 800);
   }, [mode, onlineGameId, session]);
 
   const handleCreateOnlineGame = async () => {

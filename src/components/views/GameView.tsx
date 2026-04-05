@@ -13,6 +13,7 @@ import { QuoridorBoard } from '../QuoridorBoard';
 import { PLAYER_COLORS, PLAYER_LABELS } from './LobbyView';
 import { cn } from '../../lib/utils';
 import { hu } from '../../i18n/hu/ui';
+import { SkillEffects, ScreenShake, SkillEffectType } from '../SkillEffects';
 
 // ── Skill meta (szöveg: hu.skills) ───────────────────────────────────────────
 
@@ -157,6 +158,9 @@ export function GameView({
   boardViewerIndex, trapHitFlash,
   easterEgg, onEasterEggCollect,
 }: GameViewProps) {
+  const [activeSkillEffect, setActiveSkillEffect] = useState<{ type: SkillEffectType; position?: { r: number; c: number }; playerPosition?: { r: number; c: number }; targetPosition?: { r: number; c: number } } | null>(null);
+  const [screenShake, setScreenShake] = useState<'light' | 'medium' | 'heavy' | null>(null);
+  
   const playerCount = gameState.players.length;
   const botPlayers = gameState.botPlayers ?? [];
   const teamPlay = isTeamGameState(gameState);
@@ -356,6 +360,18 @@ export function GameView({
       </div>
 
       <div className="h-6 text-sm text-[#f0c866] animate-pulse text-center">{statusMsg}</div>
+
+      {/* Skill Effects Overlay */}
+      {activeSkillEffect && (
+        <SkillEffects
+          type={activeSkillEffect.type}
+          position={activeSkillEffect.position}
+          playerPosition={activeSkillEffect.playerPosition}
+          targetPosition={activeSkillEffect.targetPosition}
+          cellSize={44}
+          onComplete={() => setActiveSkillEffect(null)}
+        />
+      )}
 
       <AnimatePresence>
         {easterEgg && onEasterEggCollect && (
