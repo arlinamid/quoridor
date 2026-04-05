@@ -26,13 +26,26 @@ export type Profile = {
   skill_loadout?: import('../game/logic').SkillType[] | null;
   owned_skills?: import('../game/logic').SkillType[];
   egg_wallet?: EggWallet;
+  /** Megvásárolt bábu skin azonosítók (lásd `pawnSkins.ts` katalógus). */
+  owned_skins?: string[];
+  /** Aktív bábu skin; üres / null = klasszikus színes korong. */
+  equipped_skin_id?: string | null;
 };
 
 // Local storage fallback for gamification if Supabase is not configured
 export const getLocalProfile = (): Profile => {
   const stored = localStorage.getItem('quoridor_profile');
   if (stored) return JSON.parse(stored);
-  return { id: 'local', username: 'Vendég', xp: 0, wins: 0, losses: 0, level: 1 };
+  return {
+    id: 'local',
+    username: 'Vendég',
+    xp: 0,
+    wins: 0,
+    losses: 0,
+    level: 1,
+    owned_skins: [],
+    equipped_skin_id: null,
+  };
 };
 
 export const saveLocalProfile = (profile: Profile) => {
@@ -382,6 +395,77 @@ export const purchaseSkill = async (
     egg_wallet: profile?.egg_wallet,
     owned_skills: profile?.owned_skills ?? [],
   };
+};
+
+/** Bábu skin vásárlás tojásért (szerver: `purchase_pawn_skin_with_eggs`). */
+export const purchasePawnSkin = async (
+  userId: string | null,
+  skinId: string,
+  eggType: import('./types').CollectibleType,
+  cost: number
+): Promise<{ result: 'ok' | 'insufficient' | 'already_owned' | 'invalid' | 'error'; egg_wallet?: EggWallet; owned_skins?: string[] }> => {
+  if (!isSupabaseConfigured || !userId) {
+    const wallet = getLocalEggWallet();
+    const p = getLocalProfile();
+    const owned = p.owned_skins ?? [];
+    if (owned.includes(skinId)) return { result: 'already_owned' };
+    if ((wallet[eggType] ?? 0) < cost) return { result: 'insufficient' };
+    wallet[eggType] -= cost;
+    const nextOwned = [...owned, skinId];
+    localStorage.setItem(LOCAL_WALLET_KEY, JSON.stringify(wallet));
+    saveLocalProfile({ ...p, owned_skins: nextOwned, egg_wallet: wallet });
+    return { result: 'ok', egg_wallet: wallet, owned_skins: nextOwned };
+  }
+
+  const { data, error } = await supabase.rpc('purchase_pawn_skin_with_eggs', {
+    p_user_id: userId,
+    p_skin_id: skinId,
+    p_egg_type: eggType,
+    p_egg_cost: cost,
+  });
+  if (error) {
+    console.error('purchase_pawn_skin_with_eggs error:', error);
+    return { result: 'error' };
+  }
+  if (data === 'unauthorized') return { result: 'error' };
+  if (data !== 'ok') return { result: data as 'insufficient' | 'already_owned' | 'invalid' };
+
+  const { data: row } = await supabase
+    .from('profiles')
+    .select('egg_wallet, owned_skins')
+    .eq('id', userId)
+    .single();
+  return {
+    result: 'ok',
+    egg_wallet: row?.egg_wallet,
+    owned_skins: row?.owned_skins ?? [],
+  };
+};
+
+/** Aktív bábu skin beállítása (csak owned, vagy null). */
+export const setEquippedPawnSkin = async (
+  userId: string | null,
+  skinId: string | null
+): Promise<'ok' | 'not_owned' | 'error'> => {
+  if (!isSupabaseConfigured || !userId) {
+    const p = getLocalProfile();
+    const owned = p.owned_skins ?? [];
+    if (skinId != null && skinId !== '' && !owned.includes(skinId)) return 'not_owned';
+    saveLocalProfile({ ...p, equipped_skin_id: skinId });
+    return 'ok';
+  }
+
+  const { data, error } = await supabase.rpc('set_equipped_pawn_skin', {
+    p_user_id: userId,
+    p_skin_id: skinId,
+  });
+  if (error) {
+    console.error('set_equipped_pawn_skin error:', error);
+    return 'error';
+  }
+  if (data === 'unauthorized') return 'error';
+  if (data === 'not_owned') return 'not_owned';
+  return 'ok';
 };
 
 /**

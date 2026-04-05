@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bunny sprite előnézet</title>
+  <style>
+    :root {
+      --bg: #1a0f08;
+      --panel: #241810;
+      --accent: #f0c866;
+      --muted: #a89078;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--muted);
+    }
+    h1 {
+      margin: 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .stage {
+      width: min(320px, 92vw);
+      aspect-ratio: 1;
+      border-radius: 16px;
+      border: 1px solid rgba(240, 200, 102, 0.25);
+      background-color: #2a1810;
+      background-image:
+        linear-gradient(45deg, #333 25%, transparent 25%),
+        linear-gradient(-45deg, #333 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #333 75%),
+        linear-gradient(-45deg, transparent 75%, #333 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 40px rgba(0,0,0,0.4);
+    }
+    .stage img {
+      width: 224px;
+      height: 224px;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45));
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    label { font-size: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    input[type="range"] { width: 140px; accent-color: var(--accent); }
+    .meta { font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+    button {
+      background: var(--panel);
+      border: 1px solid rgba(240, 200, 102, 0.35);
+      color: var(--accent);
+      padding: 0.45rem 1rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Bunny · 9 képkocka</h1>
+  <div class="stage" aria-hidden="true">
+    <img id="frame" src="frame-01.png" width="112" height="112" alt="" />
+  </div>
+  <div class="controls">
+    <button type="button" id="toggle">Szünet</button>
+    <label>
+      FPS
+      <input type="range" id="fps" min="4" max="24" value="5" />
+    </label>
+    <span class="meta" id="info">1 / 9 · 5 FPS</span>
+  </div>
+  <p class="meta" style="max-width: 320px; text-align: center; line-height: 1.5;">
+    Dev szerverrel: <code style="color: #c4a574;">/sprites/bunny/preview.html</code><br />
+    Vagy nyisd meg közvetlenül ezt a fájlt a böngészőben (file://).
+  </p>
+  <script>
+    const FRAMES = 9;
+    const img = document.getElementById("frame");
+    const fpsEl = document.getElementById("fps");
+    const info = document.getElementById("info");
+    const toggle = document.getElementById("toggle");
+    let frameIdx = 0;
+    let playing = true;
+    let last = 0;
+    let intervalMs = 1000 / 5;
+
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+    function tick(t) {
+      if (playing) {
+        if (t - last >= intervalMs) {
+          last = t;
+          frameIdx = (frameIdx + 1) % FRAMES;
+          img.src = "frame-" + pad(frameIdx + 1) + ".png";
+        }
+      } else {
+        last = t;
+      }
+      info.textContent = (frameIdx + 1) + " / " + FRAMES + " · " + Math.round(1000 / intervalMs) + " FPS";
+      requestAnimationFrame(tick);
+    }
+
+    fpsEl.addEventListener("input", () => {
+      intervalMs = 1000 / Number(fpsEl.value);
+    });
+
+    toggle.addEventListener("click", () => {
+      playing = !playing;
+      toggle.textContent = playing ? "Szünet" : "Lejátszás";
+    });
+
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EasterEggFloater } from '../EasterEggOverlay';
 import { CollectibleType } from '../../lib/types';
@@ -194,6 +194,31 @@ export function GameView({
       )
     );
 
+  const pawnSkinIds = useMemo(() => {
+    const n = gameState.players.length;
+    const out: (string | null)[] = Array.from({ length: n }, () => null);
+    const bots = gameState.botPlayers ?? [];
+    for (let pi = 0; pi < n; pi++) {
+      if (bots.includes(pi)) continue;
+      if (isOnlineMode(mode)) {
+        if (pi === onlineRole) out[pi] = profile.equipped_skin_id ?? null;
+        else out[pi] = playerProfiles[pi]?.equipped_skin_id ?? null;
+      } else if (isAIMode(mode)) {
+        if (pi === 0) out[pi] = profile.equipped_skin_id ?? null;
+      } else if (pi === 0) {
+        out[pi] = profile.equipped_skin_id ?? null;
+      }
+    }
+    return out;
+  }, [
+    gameState.players.length,
+    gameState.botPlayers,
+    mode,
+    onlineRole,
+    profile.equipped_skin_id,
+    playerProfiles,
+  ]);
+
   return (
     <motion.div
       key="game"
@@ -270,6 +295,7 @@ export function GameView({
           skillFx={skillFx}
           onTreasureDig={isTreasureMode(mode) && isLocalTurn ? onDig : undefined}
           treasureDigHighlight={canDigTreasure && onTreasureCell}
+          pawnSkinIds={pawnSkinIds}
         />
       </div>
 

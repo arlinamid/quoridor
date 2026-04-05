@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, Zap, Hammer, SkipForward, Pickaxe, Flame,
   Shield, Plus, Magnet, Crosshair, ArrowLeftRight,
-  Package, Star, CheckCircle2, Lock, ShoppingBag, ShoppingCart, Wallet,
+  Package, Star, CheckCircle2, Lock, ShoppingBag, ShoppingCart, Wallet, Sparkles,
 } from 'lucide-react';
 import { SkillType } from '../../game/logic';
 import { Profile, EggWallet } from '../../lib/supabase';
 import { CollectibleType, COLLECTIBLE_META } from '../../lib/types';
 import { hu } from '../../i18n/hu/ui';
+import { PAWN_SKIN_CATALOG, pawnSkinFrameUrl, type PawnSkinCatalogEntry } from '../../lib/pawnSkins';
 
 interface StoreViewProps {
   profile: Profile;
@@ -19,6 +20,12 @@ interface StoreViewProps {
     eggType: CollectibleType,
     cost: number
   ) => Promise<'ok' | 'insufficient' | 'already_owned' | 'error'>;
+  onPurchasePawnSkin: (
+    skinId: string,
+    eggType: CollectibleType,
+    cost: number
+  ) => Promise<'ok' | 'insufficient' | 'already_owned' | 'invalid' | 'error'>;
+  onSaveEquippedSkin: (skinId: string | null) => Promise<void>;
 }
 
 // ── Skill catalogue ──────────────────────────────────────────────────────────
@@ -72,19 +79,27 @@ function walletBalance(wallet: EggWallet | undefined, type: CollectibleType): nu
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-type StoreTab = 'shop' | 'loadout' | 'collection';
+type StoreTab = 'shop' | 'skins' | 'loadout' | 'collection';
 
-export function StoreView({ profile, onBack, onSaveLoadout, onPurchaseSkill }: StoreViewProps) {
+export function StoreView({
+  profile, onBack, onSaveLoadout, onPurchaseSkill,
+  onPurchasePawnSkin, onSaveEquippedSkin,
+}: StoreViewProps) {
   const [tab, setTab]         = useState<StoreTab>('shop');
   const [loadout, setLoadout] = useState<SkillType[]>(profile.skill_loadout ?? []);
   const [savedLoadout, setSavedLoadout] = useState(false);
   const [buying, setBuying]   = useState<SkillType | null>(null);
   const [feedback, setFeedback] = useState<{ skill: SkillType; msg: string; ok: boolean } | null>(null);
+  const [buyingSkin, setBuyingSkin] = useState<string | null>(null);
+  const [skinFeedback, setSkinFeedback] = useState<{ skinId: string; msg: string; ok: boolean } | null>(null);
+  const [savedSkinFlash, setSavedSkinFlash] = useState(false);
 
   const hasGamepass = (profile.level ?? 1) >= 5;
   const maxSlots    = hasGamepass ? 3 : 2;
   const wallet      = profile.egg_wallet ?? { EGG_BASIC: 0, EGG_GOLD: 0, EGG_RAINBOW: 0 };
   const owned       = profile.owned_skills ?? [];
+  const ownedSkins  = profile.owned_skins ?? [];
+  const equippedSkin = profile.equipped_skin_id ?? null;
   const history     = profile.collected_items ?? [];
 
   // egg counts in history for display
@@ -109,6 +124,31 @@ export function StoreView({ profile, onBack, onSaveLoadout, onPurchaseSkill }: S
     setTimeout(() => setFeedback(null), 2500);
   };
 
+  const handleBuySkin = async (entry: PawnSkinCatalogEntry) => {
+    const label = hu.store.pawnSkinCatalog[entry.id as keyof typeof hu.store.pawnSkinCatalog].label;
+    setBuyingSkin(entry.id);
+    const result = await onPurchasePawnSkin(entry.id, entry.eggType, entry.eggCost);
+    setBuyingSkin(null);
+    if (result === 'ok') {
+      setSkinFeedback({ skinId: entry.id, msg: hu.store.feedbackPurchased(label), ok: true });
+    } else if (result === 'insufficient') {
+      setSkinFeedback({ skinId: entry.id, msg: hu.store.feedbackNoEggs, ok: false });
+    } else if (result === 'already_owned') {
+      setSkinFeedback({ skinId: entry.id, msg: hu.store.feedbackOwned, ok: true });
+    } else if (result === 'invalid') {
+      setSkinFeedback({ skinId: entry.id, msg: hu.store.feedbackInvalidOffer, ok: false });
+    } else {
+      setSkinFeedback({ skinId: entry.id, msg: hu.store.feedbackError, ok: false });
+    }
+    setTimeout(() => setSkinFeedback(null), 2500);
+  };
+
+  const handleEquipSkin = async (skinId: string | null) => {
+    await onSaveEquippedSkin(skinId);
+    setSavedSkinFlash(true);
+    setTimeout(() => setSavedSkinFlash(false), 2000);
+  };
+
   // ── Loadout toggle (only from owned skills) ──
   const toggleLoadout = (skill: SkillType) => {
     setLoadout(prev => {
@@ -128,6 +168,7 @@ export function StoreView({ profile, onBack, onSaveLoadout, onPurchaseSkill }: S
   // ── Tab definitions ──
   const tabs: [StoreTab, string, React.ReactNode][] = [
     ['shop',       hu.store.tabShop,       <ShoppingCart size={14} />],
+    ['skins',      hu.store.tabSkins,      <Sparkles size={14} />],
     ['loadout',    hu.store.tabLoadout,    <ShoppingBag size={14} />],
     ['collection', hu.store.tabCollection, <Package size={14} />],
   ];
@@ -316,6 +357,132 @@ export function StoreView({ profile, onBack, onSaveLoadout, onPurchaseSkill }: S
                           ) : (
                             <><Lock size={11} /> {hu.store.notEnoughEggs}</>
                           )}
+                        </button>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── SKINS TAB ── */}
+        {tab === 'skins' && (
+          <motion.div key="skins" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col gap-3">
+            <p className="text-xs text-[#a89078] leading-relaxed">{hu.store.skinsIntro}</p>
+
+            <div className="bg-[#1a0f08] border border-[#f0c866]/25 rounded-xl p-4">
+              <div className="text-xs text-[#f0c866] uppercase tracking-widest mb-3">{hu.store.equippedSkin}</div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleEquipSkin(null)}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                    equippedSkin == null
+                      ? 'border-[#f0c866] bg-[#f0c866]/15 text-[#f0c866]'
+                      : 'border-[#f0c866]/20 text-[#a89078] hover:border-[#f0c866]/40'
+                  }`}
+                >
+                  {hu.store.skinClassic}
+                </button>
+                {PAWN_SKIN_CATALOG.map(entry => {
+                  const has = ownedSkins.includes(entry.id);
+                  if (!has) return null;
+                  const active = equippedSkin === entry.id;
+                  const t = hu.store.pawnSkinCatalog[entry.id as keyof typeof hu.store.pawnSkinCatalog];
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => handleEquipSkin(entry.id)}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all flex items-center gap-2 ${
+                        active
+                          ? 'border-[#f0c866] bg-[#f0c866]/15 text-[#f0c866]'
+                          : 'border-[#f0c866]/20 text-[#a89078] hover:border-[#f0c866]/40'
+                      }`}
+                    >
+                      <img src={pawnSkinFrameUrl(entry, 0)} alt="" className="w-7 h-7 object-contain" />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {savedSkinFlash && (
+                <div className="text-xs text-[#34d399] font-bold mt-2">{hu.store.savedSkin}</div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {PAWN_SKIN_CATALOG.map(entry => {
+                const t = hu.store.pawnSkinCatalog[entry.id as keyof typeof hu.store.pawnSkinCatalog];
+                const eggMeta = COLLECTIBLE_META[entry.eggType];
+                const has = ownedSkins.includes(entry.id);
+                const canAfford = walletBalance(wallet, entry.eggType) >= entry.eggCost;
+                const isBuying = buyingSkin === entry.id;
+                const fb = skinFeedback?.skinId === entry.id ? skinFeedback : null;
+                return (
+                  <div
+                    key={entry.id}
+                    className={`relative p-4 rounded-xl border flex flex-col gap-2 ${
+                      has ? 'border-[#f0c866]/35 bg-[#241810]' : 'border-[#f0c866]/15 bg-[#1a0f08]'
+                    }`}
+                  >
+                    {has && (
+                      <div className="absolute top-2 right-2 flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#34d399]/25 text-[#34d399]">
+                        <CheckCircle2 size={10} /> {hu.store.ownedBadge}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-16 rounded-xl bg-[#2a1810] border border-[#f0c866]/20 flex items-center justify-center shrink-0">
+                        <img src={pawnSkinFrameUrl(entry, 0)} alt="" className="w-14 h-14 object-contain" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-[#f5e6d3]">{t.label}</div>
+                        <div className="flex items-center gap-1 text-[11px]" style={{ color: eggMeta.color }}>
+                          <span>{eggMeta.icon}</span>
+                          <span className="font-bold">{entry.eggCost}×</span>
+                          <span className="text-[#a89078]">{EGG_TIER_LABEL[entry.eggType]}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-[#a89078] leading-relaxed">{t.desc}</div>
+                    <AnimatePresence mode="wait">
+                      {fb ? (
+                        <motion.div
+                          key="sfb"
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className={`text-xs font-bold text-center py-1.5 rounded-lg ${fb.ok ? 'text-[#34d399] bg-[#34d399]/10' : 'text-red-400 bg-red-500/10'}`}
+                        >
+                          {fb.msg}
+                        </motion.div>
+                      ) : has ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEquipSkin(entry.id)}
+                          disabled={equippedSkin === entry.id}
+                          className={`w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                            equippedSkin === entry.id
+                              ? 'bg-[#241810] text-[#6b5040] cursor-default'
+                              : 'bg-[#f0c866] text-[#1a0f08] hover:bg-[#f4d488]'
+                          }`}
+                        >
+                          {equippedSkin === entry.id ? hu.store.equippedSkin : hu.store.equipSkin}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleBuySkin(entry)}
+                          disabled={!canAfford || isBuying}
+                          className={`w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 ${
+                            canAfford
+                              ? 'bg-[#f0c866] text-[#1a0f08] hover:bg-[#f4d488]'
+                              : 'bg-[#241810] text-[#6b5040] border border-[#6b5040]/30 cursor-not-allowed'
+                          }`}
+                        >
+                          {isBuying ? <span className="animate-pulse">...</span> : canAfford ? <>{eggMeta.icon} {hu.store.buy}</> : <><Lock size={11} /> {hu.store.notEnoughEggs}</>}
                         </button>
                       )}
                     </AnimatePresence>

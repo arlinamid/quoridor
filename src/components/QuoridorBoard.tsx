@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Crosshair } from 'lucide-react';
 import {
@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
 import { hu } from '../i18n/hu/ui';
 import { SkillFxOverlay, SkillFxState } from './SkillFxOverlay';
+import { getPawnSkinMeta, pawnSkinFrameUrl } from '../lib/pawnSkins';
 
 /** Vízszintes / függőleges sáv: résvastagság / cella arány (korábbi 14px / 36px mobil cél). */
 const GAP_TO_CELL = 14 / 36;
@@ -33,6 +34,81 @@ interface BoardProps {
   treasureDigHighlight?: boolean;
   /** Skill / dig animációs overlay állapota. */
   skillFx?: SkillFxState | null;
+  /** Játékosonkénti bábu skin (`pawnSkins` id), null/üres = klasszikus korong. */
+  pawnSkinIds?: (string | null | undefined)[] | null;
+}
+
+function PawnToken({
+  playerIndex,
+  color,
+  skinId,
+  pawnCls,
+  gridRow,
+  gridColumn,
+}: {
+  playerIndex: number;
+  color: string;
+  skinId: string | null | undefined;
+  pawnCls: string;
+  gridRow: number;
+  gridColumn: number;
+}) {
+  const meta = skinId ? getPawnSkinMeta(skinId) : null;
+  const [frameIdx, setFrameIdx] = useState(0);
+
+  useEffect(() => {
+    if (!meta || meta.frameCount <= 1) return;
+    const ms = 1000 / Math.max(0.5, meta.fps);
+    const t = window.setInterval(() => {
+      setFrameIdx(f => (f + 1) % meta.frameCount);
+    }, ms);
+    return () => window.clearInterval(t);
+  }, [meta?.id, meta?.frameCount, meta?.fps]);
+
+  if (meta) {
+    const src = pawnSkinFrameUrl(meta, meta.frameCount <= 1 ? 0 : frameIdx);
+    return (
+      <motion.div
+        key={`pawn-${playerIndex}`}
+        className={cn(pawnCls, 'rounded-full z-20 pointer-events-none overflow-hidden border-2 border-solid')}
+        layout
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        style={{
+          gridRow,
+          gridColumn,
+          justifySelf: 'center',
+          alignSelf: 'center',
+          borderColor: `${color}cc`,
+          boxShadow: `0 3px 12px ${color}99, 0 0 16px ${color}44`,
+          background: `${color}18`,
+        }}
+      >
+        <img
+          src={src}
+          alt=""
+          className="w-full h-full object-contain select-none pointer-events-none"
+          draggable={false}
+        />
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      key={`pawn-${playerIndex}`}
+      className={cn(pawnCls, 'rounded-full z-20 pointer-events-none')}
+      layout
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      style={{
+        gridRow,
+        gridColumn,
+        justifySelf: 'center',
+        alignSelf: 'center',
+        background: `radial-gradient(circle at 35% 35%, ${color}cc, ${color}, ${color}88)`,
+        boxShadow: `0 3px 12px ${color}99, 0 0 20px ${color}66`,
+      }}
+    />
+  );
 }
 
 export function QuoridorBoard({
@@ -42,6 +118,7 @@ export function QuoridorBoard({
   onTreasureDig,
   treasureDigHighlight = true,
   skillFx = null,
+  pawnSkinIds = null,
 }: BoardProps) {
   const measureRef = useRef<HTMLDivElement>(null);
   /** Pixelben: teljes 9×9 rács beférjen; c * WIDTH_UNITS ≈ szélesség, ugyanígy magasság. */
@@ -363,20 +440,16 @@ export function QuoridorBoard({
           {/* Pawns */}
           {state.players.map((p, i) => {
             const color = PLAYER_COLORS[i];
+            const sid = pawnSkinIds?.[i];
             return (
-              <motion.div
+              <PawnToken
                 key={`pawn-${i}`}
-                className={cn(pawnCls, "rounded-full z-20 pointer-events-none")}
-                layout
-                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                style={{
-                  gridRow: p.r * 2 + 1,
-                  gridColumn: p.c * 2 + 1,
-                  justifySelf: "center",
-                  alignSelf: "center",
-                  background: `radial-gradient(circle at 35% 35%, ${color}cc, ${color}, ${color}88)`,
-                  boxShadow: `0 3px 12px ${color}99, 0 0 20px ${color}66`,
-                }}
+                playerIndex={i}
+                color={color}
+                skinId={sid}
+                pawnCls={pawnCls}
+                gridRow={p.r * 2 + 1}
+                gridColumn={p.c * 2 + 1}
               />
             );
           })}

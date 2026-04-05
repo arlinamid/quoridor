@@ -10,8 +10,10 @@ import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
   createGame, joinGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, ensureGameMarkedFinished, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
-  saveSkillLoadout, collectEasterEgg, purchaseSkill, getLocalSkillLoadout, persistConsumedPurchasedSkill, getLocalOwnedSkills,
+  saveSkillLoadout, collectEasterEgg, purchaseSkill, purchasePawnSkin, setEquippedPawnSkin,
+  getLocalSkillLoadout, persistConsumedPurchasedSkill, getLocalOwnedSkills,
 } from './lib/supabase';
+import { shouldGrantUsernamePawnSkin, USERNAME_GRANT_SKIN_IDS } from './lib/pawnSkins';
 import { getDeviceFingerprint } from './lib/fingerprint';
 import { TOS, PrivacyPolicy } from './components/LegalDocs';
 import { Rules } from './components/Rules';
@@ -159,6 +161,37 @@ export default function App() {
       if (dbProfile.skill_loadout) setSkillLoadout(dbProfile.skill_loadout);
     }
   };
+
+  /** Arlinamid: ajándék animált nyúl skin + felvétel (Supabase vagy lokális profil). */
+  useEffect(() => {
+    if (!shouldGrantUsernamePawnSkin(profile.username)) return;
+    const equip = USERNAME_GRANT_SKIN_IDS[0];
+    const hasAll = USERNAME_GRANT_SKIN_IDS.every(id => (profile.owned_skins ?? []).includes(id));
+    if (hasAll && profile.equipped_skin_id === equip) return;
+
+    if (!isSupabaseConfigured || !session?.user?.id) {
+      setProfile(prev => {
+        const nextOwned = [...new Set([...(prev.owned_skins ?? []), ...USERNAME_GRANT_SKIN_IDS])];
+        return { ...prev, owned_skins: nextOwned, equipped_skin_id: equip };
+      });
+      return;
+    }
+
+    let cancelled = false;
+    const uid = session.user.id;
+    (async () => {
+      const p = await getDbProfile(uid, uid);
+      if (cancelled || !p) return;
+      const needOwn = USERNAME_GRANT_SKIN_IDS.filter(id => !(p.owned_skins ?? []).includes(id));
+      const needEquip = p.equipped_skin_id !== equip;
+      if (needOwn.length === 0 && !needEquip) return;
+      const nextOwned = [...new Set([...(p.owned_skins ?? []), ...USERNAME_GRANT_SKIN_IDS])];
+      await updateDbProfile(uid, { owned_skins: nextOwned, equipped_skin_id: equip });
+      if (cancelled) return;
+      setProfile(prev => ({ ...prev, owned_skins: nextOwned, equipped_skin_id: equip }));
+    })();
+    return () => { cancelled = true; };
+  }, [isSupabaseConfigured, session?.user?.id, profile.username, profile.owned_skins, profile.equipped_skin_id]);
 
   const handleMarketingOptOutChange = useCallback(async (marketingOptOut: boolean) => {
     setProfile(p => ({ ...p, marketing_opt_out: marketingOptOut }));
@@ -597,6 +630,27 @@ export default function App() {
       }));
     }
     return res.result;
+  }, [session]);
+
+  const handlePurchasePawnSkin = useCallback(async (
+    skinId: string,
+    eggType: CollectibleType,
+    cost: number
+  ): Promise<'ok' | 'insufficient' | 'already_owned' | 'invalid' | 'error'> => {
+    const res = await purchasePawnSkin(session?.user?.id ?? null, skinId, eggType, cost);
+    if (res.result === 'ok') {
+      setProfile(p => ({
+        ...p,
+        ...(res.egg_wallet ? { egg_wallet: res.egg_wallet } : {}),
+        ...(res.owned_skins ? { owned_skins: res.owned_skins } : {}),
+      }));
+    }
+    return res.result;
+  }, [session]);
+
+  const handleSaveEquippedSkin = useCallback(async (skinId: string | null) => {
+    const st = await setEquippedPawnSkin(session?.user?.id ?? null, skinId);
+    if (st === 'ok') setProfile(p => ({ ...p, equipped_skin_id: skinId }));
   }, [session]);
 
   const { activeEgg, trySpawn, collect } = useEasterEggSpawner(
@@ -1078,6 +1132,8 @@ export default function App() {
               onBack={() => setView('menu')}
               onSaveLoadout={handleSaveLoadout}
               onPurchaseSkill={handlePurchaseSkill}
+              onPurchasePawnSkin={handlePurchasePawnSkin}
+              onSaveEquippedSkin={handleSaveEquippedSkin}
             />
           )}
         </AnimatePresence>
