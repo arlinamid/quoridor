@@ -238,6 +238,30 @@ export const cancelGame = async (gameId: string) => {
   await supabase.from('games').update({ status: 'cancelled' }).eq('id', gameId);
 };
 
+/** Nem-host kilépés várakozó lobbiból: saját player2/3/4 slot NULL (lásd leave_waiting_game RPC). */
+export const leaveWaitingGame = async (gameId: string) => {
+  if (!isSupabaseConfigured) return { error: null };
+  return supabase.rpc('leave_waiting_game', { p_game_id: gameId });
+};
+
+/** Aktuális user legfrissebb waiting sorja (lobby visszanyitás / re-sync). */
+export const findMyWaitingGame = async (userId: string) => {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase
+    .from('games')
+    .select('*, player1:profiles!player1_id(username)')
+    .eq('status', 'waiting')
+    .or(`player1_id.eq.${userId},player2_id.eq.${userId},player3_id.eq.${userId},player4_id.eq.${userId}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error('findMyWaitingGame', error);
+    return null;
+  }
+  return data ?? null;
+};
+
 export const getActiveGame = async (userId: string) => {
   if (!isSupabaseConfigured) return null;
   const { data } = await supabase

@@ -215,6 +215,7 @@ export const hu = {
     treasureBadge: 'Kincs',
     join: 'Csatlakozás',
     own: 'Saját',
+    resumeWaiting: 'Vissza a lobbyba',
     full: 'Teli',
     playersCount: (n: number, max: number) => `${n}/${max} játékos`,
     waitingEllipsis: 'Várakozás...',

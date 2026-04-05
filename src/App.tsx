@@ -9,7 +9,7 @@ import {
 import {
   getLocalProfile, saveLocalProfile, Profile, calculateLevel,
   supabase, isSupabaseConfigured, signInAnonymously, formatGuestAuthError, getDbProfile, updateDbProfile,
-  createGame, joinGame, cancelGame, cancelMyWaitingGames, getActiveGame, updateGameState, ensureGameMarkedFinished, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
+  createGame, joinGame, cancelGame, leaveWaitingGame, findMyWaitingGame, cancelMyWaitingGames, getActiveGame, updateGameState, ensureGameMarkedFinished, getUsernameByFingerprint, getLeaderboard, awardXp, signInWithMagicLink, upgradeAnonymousAccount,
   saveSkillLoadout, collectEasterEgg, purchaseSkill, purchasePawnSkin, setEquippedPawnSkin,
   getLocalSkillLoadout, persistConsumedPurchasedSkill, getLocalOwnedSkills,
 } from './lib/supabase';
@@ -24,7 +24,7 @@ import { CollectibleType } from './lib/types';
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { GameMode, View, isOnlineMode, isAIMode, usesTreasureRules, isBattlefieldMode } from './lib/types';
-import { countFilledOnlineSlots, filterBotSlotsForPlayerCount } from './lib/onlineLobby';
+import { countFilledOnlineSlots, filterBotSlotsForPlayerCount, waitingGameRowMatchesMode } from './lib/onlineLobby';
 import { AuthView } from './components/views/AuthView';
 import { MenuView } from './components/views/MenuView';
 import { LobbyView } from './components/views/LobbyView';
@@ -729,10 +729,46 @@ export default function App() {
     }
   }, [session]);
 
-  const startGame = useCallback((selectedMode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => {
-    if (isOnlineMode(selectedMode) && onlineGameId) {
-      alert(hu.app.alertOnlineStuck);
-      return;
+  const startGame = useCallback(async (selectedMode: GameMode, difficulty?: 'easy' | 'medium' | 'hard') => {
+    const uid = sessionRef.current?.user?.id;
+    if (isOnlineMode(selectedMode)) {
+      const inLiveOnlineMatch =
+        viewRef.current === 'game' &&
+        !gameStateRef.current.gameOver &&
+        isOnlineMode(modeRef.current) &&
+        !!onlineGameIdRef.current;
+      if (inLiveOnlineMatch) {
+        alert(hu.app.alertOnlineStuck);
+        return;
+      }
+      if (uid && isSupabaseConfigured) {
+        const row = await findMyWaitingGame(uid);
+        if (row && waitingGameRowMatchesMode(selectedMode, row)) {
+          setShowWin(false);
+          setWinReason('');
+          setStatusMsg('');
+          setTargetingSkill(null);
+          setTrapHitFlash(null);
+          setSkillFx(null);
+          setMode(selectedMode);
+          setView('lobby');
+          setOnlineGameId(row.id);
+          const role =
+            row.player1_id === uid ? 0
+            : row.player2_id === uid ? 1
+            : row.player3_id === uid ? 2
+            : 3;
+          setOnlineRole(role);
+          setGameState(stripSkillFxBroadcast(row.state as GameState));
+          setHostedGameData(row);
+          setPlayerProfiles({});
+          setBotSlots([]);
+          const pl = row.state?.pendingTeamLayout as OnlineTeamLayoutId | undefined;
+          if (pl) setOnlineTeamLayout(pl);
+          setMaxPlayers(Math.min(4, Math.max(2, row.max_players ?? 2)));
+          return;
+        }
+      }
     }
     setShowWin(false); setWinReason(''); setStatusMsg(''); setTargetingSkill(null); setTrapHitFlash(null); setSkillFx(null);
     if (difficulty) setAiDifficulty(difficulty);
@@ -756,7 +792,7 @@ export default function App() {
     );
     setAnimating(false); setTimeLeft(120);
     setView('game');
-  }, [onlineGameId]);
+  }, []);
 
   // Start positions indexed by player slot — used for trap teleport-back
   const PLAYER_START = [
@@ -1045,11 +1081,34 @@ export default function App() {
 
   const handleLeaveOnlineGame = useCallback(async () => {
     if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
-    // Only cancel (remove from DB) when leaving the lobby; in-game leave lets
-    // remaining players continue with bots driven by the new lowest-role human.
-    if (onlineGameId && onlineRole === 0 && viewRef.current === 'lobby') await cancelGame(onlineGameId);
+    // Lobby: host cancels the row; joiner clears only their slot (leave_waiting_game).
+    // In-game leave: do not touch DB here — others keep playing.
+    if (onlineGameId && viewRef.current === 'lobby') {
+      if (onlineRole === 0) await cancelGame(onlineGameId);
+      else {
+        const { error } = await leaveWaitingGame(onlineGameId);
+        if (error) console.error('leaveWaitingGame', error);
+      }
+    }
     setOnlineGameId(null); setHostedGameData(null); setBotSlots([]); setOnlineTeamLayout('ffa'); setView('menu');
   }, [onlineGameId, onlineRole]);
+
+  const handleResumeWaitingGame = useCallback((row: any) => {
+    if (!session?.user?.id) return;
+    const uid = session.user.id;
+    setOnlineGameId(row.id);
+    const role =
+      row.player1_id === uid ? 0
+      : row.player2_id === uid ? 1
+      : row.player3_id === uid ? 2
+      : 3;
+    setOnlineRole(role);
+    setGameState(stripSkillFxBroadcast(row.state as GameState));
+    setHostedGameData(row);
+    const pl = row.state?.pendingTeamLayout as OnlineTeamLayoutId | undefined;
+    if (pl) setOnlineTeamLayout(pl);
+    setMaxPlayers(Math.min(4, Math.max(2, row.max_players ?? 2)));
+  }, [session]);
 
   const handleRejoinGame = useCallback(async (game: any) => {
     if (!session) return;
@@ -1174,7 +1233,7 @@ export default function App() {
             <MenuView key="menu" onStartGame={startGame} onRules={() => setView('rules')} onStore={() => setView('store')} />
           )}
           {view === 'lobby' && (
-            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={handleMaxPlayersChange} teamLayout={onlineTeamLayout} onTeamLayoutChange={handleOnlineTeamLayoutChange} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} />
+            <LobbyView key="lobby" mode={mode} onlineGameId={onlineGameId} onlineRole={onlineRole} maxPlayers={maxPlayers} onMaxPlayersChange={handleMaxPlayersChange} teamLayout={onlineTeamLayout} onTeamLayoutChange={handleOnlineTeamLayoutChange} waitingGames={waitingGames} lobbyUsers={lobbyUsers} sessionUserId={session?.user.id} hostedGameData={hostedGameData} botSlots={botSlots} slotNames={lobbySlotNames} onToggleBot={idx => setBotSlots(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx])} onBack={handleLeaveOnlineGame} onCreateGame={handleCreateOnlineGame} onStartGame={handleStartOnlineGame} onJoinGame={handleJoinOnlineGame} onResumeWaitingGame={handleResumeWaitingGame} />
           )}
           {view === 'game' && (
             <GameView

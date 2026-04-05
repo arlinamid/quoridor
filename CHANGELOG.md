@@ -74,7 +74,16 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ## [Unreleased]
 
-_(Következő kiadásig.)_
+### Added
+- **`leave_waiting_game` RPC** (`supabase/migrations/20260405210000_leave_waiting_game_rpc.sql`) — várakozó meccsnél a **nem host** játékos kilépésekor a saját `player2_id` / `player3_id` / `player4_id` **NULL**; host továbbra is `cancelGame` / `cancelled`.
+- **Kliens** — `leaveWaitingGame`, `findMyWaitingGame` (`supabase.ts`); **`firstEmptyJoinSlot`**, **`waitingRowHasFreeJoinSlot`**, **`waitingGameRowMatchesMode`** export (`onlineLobby.ts`).
+- **Lobby lista** — „**Vissza a lobbyba**” (`hu.lobby.resumeWaiting`), ha a sorban már benne vagy; join slot számítás **lyukas** slotoknál is helyes.
+
+### Changed
+- **`App.tsx`** — lobby **Vissza**: host → `cancelGame`; joiner → `leaveWaitingGame`. **Online mód** újraválasztásakor, ha van **waiting** meccs a móddal egyezően → lobby visszaállítás (`findMyWaitingGame`), élő part közben továbbra is figyelmeztetés.
+
+### Ops
+- **Éles DB** — migráció feltöltve: `npx supabase db push --linked --yes` (2026-04-05).
 
 ---
 

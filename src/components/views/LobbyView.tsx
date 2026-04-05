@@ -3,7 +3,12 @@ import { motion } from 'motion/react';
 import { ArrowLeft, User, Map, Play, Users, Bot, X, Swords } from 'lucide-react';
 import { GameMode } from '../../lib/types';
 import { Profile } from '../../lib/supabase';
-import { countFilledOnlineSlots } from '../../lib/onlineLobby';
+import {
+  countFilledOnlineSlots,
+  waitingGameRowMatchesMode,
+  firstEmptyJoinSlot,
+  waitingRowHasFreeJoinSlot,
+} from '../../lib/onlineLobby';
 import { teamsForOnlineLayout, type OnlineTeamLayoutId } from '../../game/logic';
 import { cn } from '../../lib/utils';
 import { hu } from '../../i18n/hu/ui';
@@ -28,6 +33,7 @@ interface LobbyViewProps {
   onCreateGame: () => void;
   onStartGame: () => void;
   onJoinGame: (id: string, state: any, p1Id: string, slotIndex: 1 | 2 | 3) => void;
+  onResumeWaitingGame: (row: any) => void;
   teamLayout: OnlineTeamLayoutId;
   onTeamLayoutChange: (l: OnlineTeamLayoutId) => void;
 }
@@ -52,19 +58,6 @@ function fmt(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Várakozó játéklista: klasszikus / kincs / battlefield szétválasztása. */
-function waitingRowMatchesMode(
-  mode: GameMode,
-  g: { state?: { treasureMode?: boolean; battlefieldMode?: boolean } }
-): boolean {
-  const tm = Boolean(g.state?.treasureMode);
-  const bf = Boolean(g.state?.battlefieldMode);
-  if (mode === 'battlefield-online') return bf;
-  if (mode === 'treasure-online') return tm && !bf;
-  if (mode === 'online') return !tm && !bf;
-  return true;
-}
-
 function teamLayoutLabel(layout: OnlineTeamLayoutId, cap: number): string {
   if (layout === 'ffa' || cap < 3) return hu.lobby.teamFfa;
   if (cap === 3) {
@@ -79,7 +72,7 @@ export function LobbyView({
   mode, onlineGameId, onlineRole, maxPlayers, onMaxPlayersChange,
   waitingGames, lobbyUsers, sessionUserId,
   hostedGameData, botSlots, slotNames, onToggleBot,
-  onBack, onCreateGame, onStartGame, onJoinGame,
+  onBack, onCreateGame, onStartGame, onJoinGame, onResumeWaitingGame,
   teamLayout, onTeamLayoutChange,
 }: LobbyViewProps) {
   const AUTO_START_MS = 2 * 60 * 1000;
@@ -95,7 +88,7 @@ export function LobbyView({
     : ((hostedGameData?.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? 'ffa');
 
   const activeGames = waitingGames.filter(
-    g => lobbyUsers.has(g.player1_id) && waitingRowMatchesMode(mode, g)
+    g => lobbyUsers.has(g.player1_id) && waitingGameRowMatchesMode(mode, g)
   );
 
   const previewTeams = lobbyCap >= 3 ? teamsForOnlineLayout(effectiveTeamLayout, lobbyCap) : undefined;
@@ -351,8 +344,15 @@ export function LobbyView({
                   {activeGames.map(g => {
                     const filled = [g.player1_id, g.player2_id, g.player3_id, g.player4_id].filter(Boolean).length;
                     const max = g.max_players || 2;
-                    const nextSlot = (filled) as 1 | 2 | 3;
-                    const isFull = filled >= max;
+                    const nextSlot = firstEmptyJoinSlot(g, max);
+                    const isFull = !waitingRowHasFreeJoinSlot(g, max);
+                    const inThisGame = Boolean(
+                      sessionUserId &&
+                        (g.player1_id === sessionUserId ||
+                          g.player2_id === sessionUserId ||
+                          g.player3_id === sessionUserId ||
+                          g.player4_id === sessionUserId)
+                    );
                     return (
                       <div key={g.id} className="flex justify-between items-center bg-[#241810] p-4 rounded-lg border border-white/5">
                         <div className="flex items-center gap-3">
@@ -376,12 +376,19 @@ export function LobbyView({
                             </div>
                           </div>
                         </div>
-                        {g.player1_id === sessionUserId ? (
-                          <span className="text-xs text-[#a89078] uppercase tracking-wider px-4 py-2">{hu.lobby.own}</span>
-                        ) : isFull ? (
+                        {inThisGame ? (
+                          <button
+                            type="button"
+                            onClick={() => onResumeWaitingGame(g)}
+                            className="bg-transparent border border-[#f0c866]/50 text-[#f0c866] px-4 py-2 rounded hover:bg-[#f0c866]/10 transition-colors text-sm uppercase tracking-wider"
+                          >
+                            {hu.lobby.resumeWaiting}
+                          </button>
+                        ) : isFull || nextSlot === null ? (
                           <span className="text-xs text-white/30 uppercase tracking-wider px-4 py-2">{hu.lobby.full}</span>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => onJoinGame(g.id, g.state, g.player1_id, nextSlot)}
                             className="bg-transparent border border-[#f0c866]/50 text-[#f0c866] px-4 py-2 rounded hover:bg-[#f0c866]/10 transition-colors text-sm uppercase tracking-wider"
                           >

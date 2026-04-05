@@ -33,6 +33,7 @@ Magyar nyelvű felület, **9 játékmód** (klasszikus / kincs / Battlefield × 
 - **Játékon belüli maradás** — új online meccs nem indítható, amíg egy másikban benne vagy
 - **Online csapatbeosztás (3–4 játékos)** — a host a lobbyban választhat szabad játékot (FFA) vagy fix csapatelrendezést (pl. három játékosnál 1v2 / 2v1, négy játékosnál 2v2); a győzelem képernyő csapat szerint értelmezi a nyerést
 - **Battlefield online** — a várakozó meccsek **Normal / Kincskereső / Battlefield** szerint szétválasztva jelennek meg; a játék JSON állapotában `battlefieldMode` és `trenches` tárolódik
+- **Lobby kilépés (joiner)** — a várakozó képernyőről való visszalépéskor a kliens meghívja a **`leave_waiting_game`** RPC-t, így a játékos **kiszáll a DB-sorból** és felszabadul a hely; a host továbbra is a teljes meccs **lemondásával** (`cancelled`) lép ki
 
 ---
 
@@ -193,6 +194,14 @@ create table games (
 ```
 
 ### Migrációk (ha meglévő táblák frissítése szükséges)
+
+**CLI — lokális `supabase/migrations/*.sql` feltöltése a linkelt projektre** (bejelentkezett Supabase CLI + `supabase link` után):
+
+```bash
+npx supabase db push --linked --yes
+```
+
+Egy példa új függvény: **`leave_waiting_game`** (joiner kilépés waiting lobbyból) — fájl: `supabase/migrations/20260405210000_leave_waiting_game_rpc.sql`. Ugyanez manuálisan: másold be a migráció SQL-jét a Supabase **SQL Editor**ba.
 
 ```sql
 -- games tábla bővítések
