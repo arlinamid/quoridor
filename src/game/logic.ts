@@ -147,6 +147,41 @@ export function v2w(vr: number, vc: number, o: 'h' | 'v'): Wall | null {
   return { r: ir, c: ic, orient: 'v' };
 }
 
+/**
+ * Vízszintes vagy függőleges sáv (nem sarok): a két szomszédos mező, amit a rés elválaszt.
+ * Sarokrésekre `null` (ott több mező érintett).
+ */
+export function gapAdjacentCells(vr: number, vc: number): { a: { r: number; c: number }; b: { r: number; c: number } } | null {
+  const isR = vr % 2 === 0;
+  const isC = vc % 2 === 0;
+  if (isR && isC) return null;
+  if (!isR && isC) {
+    const rTop = (vr - 1) >> 1;
+    const rBot = (vr + 1) >> 1;
+    const c = vc >> 1;
+    return { a: { r: rTop, c }, b: { r: rBot, c } };
+  }
+  if (isR && !isC) {
+    const r = vr >> 1;
+    const cLeft = (vc - 1) >> 1;
+    const cRight = (vc + 1) >> 1;
+    return { a: { r, c: cLeft }, b: { r, c: cRight } };
+  }
+  return null;
+}
+
+/**
+ * Fal a vizuális rács rése alapján: H/V sávnál mindig a helyes irány; saroknál `cornerOrient`.
+ */
+export function wallFromGapVisual(vr: number, vc: number, cornerOrient: 'h' | 'v'): Wall | null {
+  const isR = vr % 2 === 0;
+  const isC = vc % 2 === 0;
+  if (isR && isC) return null;
+  if (!isR && isC) return v2w(vr, vc, 'h');
+  if (isR && !isC) return v2w(vr, vc, 'v');
+  return v2w(vr, vc, cornerOrient);
+}
+
 export function isBlocked(s: GameState, r1: number, c1: number, r2: number, c2: number, ignoreWalls = false) {
   if (ignoreWalls) return false;
   for (const w of s.walls) {
@@ -201,6 +236,22 @@ export function getValidMoves(s: GameState, pi: number) {
     }
   }
   return mv;
+}
+
+/**
+ * A rés pontosan az aktuális játékos mezője és egy érvényes lépési cél között van-e.
+ * Ilyenkor „fal nélküli” (nem fal-mód) réskattintást nem fogadunk el, hogy ne ütközzön a lépés szándékával;
+ * fal-módban továbbra is lehet ide falat rakni.
+ */
+export function isGapBetweenPlayerAndValidMove(s: GameState, vr: number, vc: number): boolean {
+  const pair = gapAdjacentCells(vr, vc);
+  if (!pair) return false;
+  const p = s.players[s.turn];
+  const moves = getValidMoves(s, s.turn);
+  const isDest = (r: number, c: number) => moves.some(m => m.r === r && m.c === c);
+  const onP = (r: number, c: number) => r === p.r && c === p.c;
+  return (onP(pair.a.r, pair.a.c) && isDest(pair.b.r, pair.b.c))
+    || (onP(pair.b.r, pair.b.c) && isDest(pair.a.r, pair.a.c));
 }
 
 export function wallsOverlap(a: Wall, b: Wall) {

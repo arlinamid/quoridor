@@ -64,7 +64,7 @@ export function RulesScrollableContent() {
         </h3>
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li><strong>Kezdő falak száma:</strong> 2 játékos — <strong>10–10</strong>; 3 játékos — <strong>7</strong>; 4 játékos — <strong>5</strong> (játékosonként).</li>
-          <li>A fal <strong>két mező hosszú</strong>, a rácsvonalakra kerül; vízszintes / függőleges (jobb klikk vagy Forgatás).</li>
+          <li>A fal <strong>két mező hosszú</strong>, a rácsvonalakra kerül. <strong>Ráskattintás</strong> is lerakhat falat (vízszintes / függőleges sávnál a rács alapján jó irány); a <strong>Fal lerakása</strong> módban a <strong>Forgatás</strong> a sarokrésekhez kell. Ha egy rés <strong>közvetlenül a bábud és egy zöld (léphető) mező között</strong> van, csak fal-módban rakunk oda falat — így a lépés és a fal nem keveredik össze.</li>
           <li>Nem metszhetik / fedhetik egymást; lerakás után fix.</li>
           <li><strong>Tilos olyan falat lerakni, amivel bármely játékos elvágná az összes útvonalat a saját célvonalához.</strong> A játék ezt nem engedi.</li>
         </ul>

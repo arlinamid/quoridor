@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Crosshair } from 'lucide-react';
-import { GameState, v2w, getValidMoves, isValidWall, Wall, SkillType, isValidTrapPlacement, viewerSeesTrapMarker } from '../game/logic';
+import {
+  GameState, v2w, getValidMoves, isValidWall, Wall, SkillType, isValidTrapPlacement, viewerSeesTrapMarker,
+  wallFromGapVisual, isGapBetweenPlayerAndValidMove,
+} from '../game/logic';
 import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
 import { hu } from '../i18n/hu/ui';
@@ -80,12 +83,18 @@ export function QuoridorBoard({
   const isHoverValid = hoveredWall ? isValidWall(state, hoveredWall.r, hoveredWall.c, hoveredWall.orient) : false;
 
   const handleGapHover = (vr: number, vc: number, entering: boolean) => {
-    if (!wallMode || state.gameOver || animating || disabled) return;
     if (!entering) {
       setHoveredWall(null);
       return;
     }
-    const wp = v2w(vr, vc, wallOrient);
+    if (targetingSkill) return;
+    const canWallPreview = wallMode || (state.players[state.turn]?.walls ?? 0) > 0;
+    if (!canWallPreview || state.gameOver || animating || disabled) return;
+    if (!wallMode && isGapBetweenPlayerAndValidMove(state, vr, vc)) {
+      setHoveredWall(null);
+      return;
+    }
+    const wp = wallFromGapVisual(vr, vc, wallOrient);
     if (wp) setHoveredWall(wp);
   };
 
@@ -105,20 +114,46 @@ export function QuoridorBoard({
       return;
     }
 
-    const wp = v2w(vr, vc, wallOrient);
-    
+    const wpDyn = v2w(vr, vc, wallOrient);
+
     if (targetingSkill === 'DYNAMITE') {
-      if (wp && onSkillTarget) {
-        onSkillTarget(wp.r, wp.c);
+      if (wpDyn && onSkillTarget) {
+        onSkillTarget(wpDyn.r, wpDyn.c);
       }
       return;
     }
 
-    if (!wallMode) return;
-    if (wp && isValidWall(state, wp.r, wp.c, wp.orient)) {
+    if (targetingSkill) return;
+
+    const wallsLeft = state.players[state.turn]?.walls ?? 0;
+    if (wallsLeft <= 0) return;
+
+    const tryPlace = (w: Wall): boolean => {
+      if (!isValidWall(state, w.r, w.c, w.orient)) return false;
       setHoveredWall(null);
-      onWallPlace(wp.r, wp.c, wp.orient);
+      onWallPlace(w.r, w.c, w.orient);
+      return true;
+    };
+
+    // Fal nélküli mód: réskattintás is lerakhat falat, kivéve a „lépés vs fal” ütközést a bábu mellett.
+    if (!wallMode) {
+      if (isGapBetweenPlayerAndValidMove(state, vr, vc)) return;
+      const isCorner = vr % 2 === 1 && vc % 2 === 1;
+      if (isCorner) {
+        for (const o of ['h', 'v'] as const) {
+          const w = v2w(vr, vc, o);
+          if (w && tryPlace(w)) return;
+        }
+        return;
+      }
+      const wp = wallFromGapVisual(vr, vc, wallOrient);
+      if (wp) tryPlace(wp);
+      return;
     }
+
+    // Fal-mód: saroknál a Forgatás; H/V sávnál a geometria (nem lehet eltéveszteni az irányt).
+    const wp = wallFromGapVisual(vr, vc, wallOrient);
+    if (wp) tryPlace(wp);
   };
 
   const handleCellClick = (r: number, c: number) => {
@@ -219,7 +254,7 @@ export function QuoridorBoard({
                 r === 0 && "shadow-[inset_0_3px_0_#2c3e50]",
                 c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
                 c === 0 && "shadow-[inset_3px_0_0_#8e44ad]",
-                isValidMove ? "bg-[rgba(76,175,80,0.4)] cursor-pointer" :
+                isValidMove && !wallMode ? "relative z-[8] bg-[rgba(76,175,80,0.4)] cursor-pointer" :
                 isOwnTreasureDig ? "bg-[rgba(232,184,48,0.35)] cursor-pointer ring-2 ring-[#e8b830]/90 ring-offset-1 ring-offset-[#2a1810] shadow-[0_0_14px_rgba(232,184,48,0.45)]" :
                 isTrapTarget ? "bg-[rgba(251,146,60,0.45)] cursor-pointer shadow-[0_0_12px_rgba(251,146,60,0.55)]" :
                 isTeleportTarget ? "bg-[rgba(232,184,48,0.4)] cursor-pointer shadow-[0_0_10px_rgba(232,184,48,0.6)]" : "hover:bg-[#d4a87a] cursor-pointer"
@@ -252,6 +287,7 @@ export function QuoridorBoard({
               className={cn(
                 typeClass,
                 "cursor-pointer rounded-sm relative transition-colors duration-150",
+                wallMode ? "z-[10]" : "z-[1]",
                 isPlaced && !isTarget && "bg-[#e8b830] shadow-[0_0_8px_rgba(232,184,48,0.4)] z-10",
                 isTarget && "bg-[#e74c3c] shadow-[0_0_12px_rgba(231,76,60,0.8)] z-10",
                 isHovered && !isPlaced && !isTarget && (isHoverValid ? "bg-[rgba(240,200,102,0.5)]" : "bg-[rgba(231,76,60,0.4)]")

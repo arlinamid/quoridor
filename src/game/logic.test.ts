@@ -3,6 +3,7 @@ import {
   hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, cloneS, isValidTrapPlacement, trapAffectsVictim, viewerSeesTrapMarker,
   evHard, mmRoot, opponentIndices, getWallCandidatesNearPath, greedyBotMove,
+  gapAdjacentCells, wallFromGapVisual, isGapBetweenPlayerAndValidMove,
   type GameState,
 } from './logic';
 
@@ -100,6 +101,49 @@ describe('v2w', () => {
   it('returns null when wall indices leave the board', () => {
     expect(v2w(1, 16, 'h')).toBeNull();
     expect(v2w(1, 18, 'h')).toBeNull();
+  });
+});
+
+describe('gapAdjacentCells', () => {
+  it('maps horizontal strip between stacked cells', () => {
+    expect(gapAdjacentCells(1, 2)).toEqual({ a: { r: 0, c: 1 }, b: { r: 1, c: 1 } });
+  });
+  it('maps vertical strip between adjacent columns', () => {
+    expect(gapAdjacentCells(2, 7)).toEqual({ a: { r: 1, c: 3 }, b: { r: 1, c: 4 } });
+  });
+  it('returns null on corner cells', () => {
+    expect(gapAdjacentCells(1, 1)).toBeNull();
+  });
+});
+
+describe('wallFromGapVisual', () => {
+  it('H strip ignores cornerOrient', () => {
+    expect(wallFromGapVisual(1, 8, 'v')).toEqual(v2w(1, 8, 'h'));
+  });
+  it('V strip ignores cornerOrient', () => {
+    expect(wallFromGapVisual(4, 5, 'h')).toEqual(v2w(4, 5, 'v'));
+  });
+});
+
+describe('isGapBetweenPlayerAndValidMove', () => {
+  it('is true for the gap between player and a direct valid step', () => {
+    const s = initState(false, 2);
+    s.players[0].r = 0;
+    s.players[0].c = 4;
+    s.players[1].r = 8;
+    s.players[1].c = 4;
+    s.turn = 0;
+    expect(getValidMoves(s, 0).some(m => m.r === 1 && m.c === 4)).toBe(true);
+    expect(isGapBetweenPlayerAndValidMove(s, 1, 8)).toBe(true);
+  });
+  it('is false when the gap is not between player and any valid move', () => {
+    const s = initState(false, 2);
+    s.players[0].r = 0;
+    s.players[0].c = 4;
+    s.players[1].r = 8;
+    s.players[1].c = 4;
+    s.turn = 0;
+    expect(isGapBetweenPlayerAndValidMove(s, 1, 0)).toBe(false);
   });
 });
 
