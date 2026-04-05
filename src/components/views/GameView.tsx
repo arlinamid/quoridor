@@ -202,7 +202,7 @@ export function GameView({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="flex-1 flex flex-col items-center w-full max-w-2xl px-3 pt-2 pb-3 md:p-4"
+      className="flex-1 flex flex-col items-center w-full min-w-0 max-w-2xl px-3 pt-2 pb-3 md:p-4"
     >
       {/* Player cards */}
       <div className="w-full flex items-center gap-2 py-2 md:py-3 flex-wrap justify-center shrink-0">
@@ -253,7 +253,7 @@ export function GameView({
         </div>
       </div>
 
-      <div className="w-full flex justify-center shrink-0">
+      <div className="w-full min-w-0 flex justify-center shrink-0">
         <QuoridorBoard
           state={gameState}
           wallMode={wallMode}

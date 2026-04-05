@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import { motion } from 'motion/react';
 import { Crosshair } from 'lucide-react';
 import {
@@ -8,6 +8,11 @@ import {
 import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
 import { hu } from '../i18n/hu/ui';
+
+/** Vízszintes / függőleges sáv: résvastagság / cella arány (korábbi 14px / 36px mobil cél). */
+const GAP_TO_CELL = 14 / 36;
+/** 9 oszlop cella + 8 függőleges rés → teljes szélesség = cella * ennyi. */
+const WIDTH_UNITS = 9 + 8 * GAP_TO_CELL;
 
 interface BoardProps {
   state: GameState;
@@ -35,23 +40,63 @@ export function QuoridorBoard({
   onTreasureDig,
   treasureDigHighlight = true,
 }: BoardProps) {
-  const n = state.playerCount ?? state.players.length;
-  // Mobil / keskeny képernyő: nagyobb minimum érintési cél (~40px+ mező, ~14px+ rések); md+ kompakt asztali rács.
-  const cellCls = n >= 3
-    ? "w-[clamp(36px,9vw,60px)] h-[clamp(36px,9vw,60px)] md:w-[clamp(28px,8vw,60px)] md:h-[clamp(28px,8vw,60px)]"
-    : "w-[clamp(36px,7.5vw,48px)] h-[clamp(36px,7.5vw,48px)] md:w-[clamp(28px,6vw,48px)] md:h-[clamp(28px,6vw,48px)]";
-  const gapHCls = n >= 3
-    ? "w-[clamp(36px,9vw,60px)] md:w-[clamp(28px,8vw,60px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,10px)]"
-    : "w-[clamp(36px,7.5vw,48px)] md:w-[clamp(28px,6vw,48px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,8px)]";
-  const gapVCls = n >= 3
-    ? "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,10px)] h-[clamp(36px,9vw,60px)] md:h-[clamp(28px,8vw,60px)]"
-    : "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,8px)] h-[clamp(36px,7.5vw,48px)] md:h-[clamp(28px,6vw,48px)]";
-  const gapBothCls = n >= 3
-    ? "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,10px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,10px)]"
-    : "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,8px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,8px)]";
-  const pawnCls = n >= 3
-    ? "w-[clamp(22px,6.5vw,44px)] h-[clamp(22px,6.5vw,44px)] md:w-[clamp(20px,6vw,44px)] md:h-[clamp(20px,6vw,44px)]"
-    : "w-[clamp(22px,5vw,32px)] h-[clamp(22px,5vw,32px)] md:w-[clamp(20px,4.5vw,32px)] md:h-[clamp(20px,4.5vw,32px)]";
+  const measureRef = useRef<HTMLDivElement>(null);
+  /** Pixelben: teljes 9×9 rács beférjen; c * WIDTH_UNITS ≈ szélesség, ugyanígy magasság. */
+  const [cellPx, setCellPx] = useState(26);
+  const gapPx = cellPx * GAP_TO_CELL;
+
+  useLayoutEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+
+    const compute = () => {
+      const padFrame = 16;
+      const availW = Math.max(0, el.clientWidth - padFrame);
+      const top = el.getBoundingClientRect().top;
+      const vv = window.visualViewport;
+      const vh = vv?.height ?? window.innerHeight;
+      const reservedBelow = 200;
+      const availH = Math.max(48, vh - top - reservedBelow);
+      const wide = window.matchMedia('(min-width: 768px)').matches;
+      const cap = wide ? 56 : 40;
+      const floor = 20;
+      const byW = availW / WIDTH_UNITS;
+      const byH = availH / WIDTH_UNITS;
+      const c = Math.min(cap, Math.max(floor, Math.min(byW, byH)));
+      setCellPx(Math.round(c * 100) / 100);
+    };
+
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', compute);
+    vv?.addEventListener('scroll', compute);
+    window.addEventListener('resize', compute);
+    return () => {
+      ro.disconnect();
+      vv?.removeEventListener('resize', compute);
+      vv?.removeEventListener('scroll', compute);
+      window.removeEventListener('resize', compute);
+    };
+  }, []);
+
+  const cellCls = "w-[length:var(--qc)] h-[length:var(--qc)]";
+  const gapHCls = "w-[length:var(--qc)] h-[length:var(--qg)]";
+  const gapVCls = "w-[length:var(--qg)] h-[length:var(--qc)]";
+  const gapBothCls = "w-[length:var(--qg)] h-[length:var(--qg)]";
+  const pawnCls = "w-[length:var(--qp)] h-[length:var(--qp)]";
+
+  const gridCssVars = useMemo(
+    () =>
+      ({
+        '--qc': `${cellPx}px`,
+        '--qg': `${gapPx}px`,
+        '--qp': `${Math.round(cellPx * 0.61 * 100) / 100}px`,
+      }) as React.CSSProperties,
+    [cellPx, gapPx]
+  );
+
   const [hoveredWall, setHoveredWall] = useState<Wall | null>(null);
 
   const validMoves = useMemo(() => {
@@ -306,9 +351,15 @@ export function QuoridorBoard({
   };
 
   return (
-    <div className="flex justify-center py-2 touch-manipulation select-none [-webkit-tap-highlight-color:transparent]">
-      <div className="bg-[#2a1810] p-2 md:p-3 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] relative">
-        <div className="grid grid-cols-[repeat(17,auto)] grid-rows-[repeat(17,auto)] gap-0 relative overscroll-contain">
+    <div
+      ref={measureRef}
+      className="flex w-full max-w-full min-w-0 justify-center py-2 touch-manipulation select-none [-webkit-tap-highlight-color:transparent]"
+    >
+      <div className="bg-[#2a1810] p-2 md:p-3 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] relative max-w-full">
+        <div
+          className="grid grid-cols-[repeat(17,auto)] grid-rows-[repeat(17,auto)] gap-0 relative overscroll-contain mx-auto"
+          style={gridCssVars}
+        >
           {renderGrid()}
           
           {/* Pawns */}
