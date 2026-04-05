@@ -895,9 +895,9 @@ export default function App() {
   const iWonOnline = isOnlineMode(mode) && viewerSharesWin(gameState.teams, winnerIdx, onlineRole, gameState.players.length);
 
   return (
-    <div className="min-h-screen text-[#f5e6d3] font-['Outfit',sans-serif] overflow-hidden flex flex-col items-center">
+    <div className="min-h-screen min-h-dvh w-full text-[#f5e6d3] font-['Outfit',sans-serif] overflow-x-hidden flex flex-col items-center">
       <ThreeBackground />
-      <div className="relative z-10 w-full min-h-screen flex flex-col items-center">
+      <div className="relative z-10 w-full min-h-screen min-h-dvh flex flex-col items-center pb-[max(0.5rem,env(safe-area-inset-bottom))]">
 
         {view !== 'auth' && view !== 'tos' && view !== 'privacy' && (
           <div className="w-full max-w-4xl p-4 flex justify-between items-center bg-[#1a0f08]/80 backdrop-blur-md border-b border-[#f0c866]/20">

@@ -202,10 +202,10 @@ export function GameView({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="flex-1 flex flex-col items-center w-full max-w-2xl p-4"
+      className="flex-1 flex flex-col items-center w-full max-w-2xl px-3 pt-2 pb-3 md:p-4"
     >
       {/* Player cards */}
-      <div className="w-full flex items-center gap-2 py-3 flex-wrap justify-center">
+      <div className="w-full flex items-center gap-2 py-2 md:py-3 flex-wrap justify-center shrink-0">
         {gameState.players.map((p, pi) => {
           const isActive = gameState.turn === pi;
           const isBot = botPlayers.includes(pi);
@@ -253,24 +253,26 @@ export function GameView({
         </div>
       </div>
 
-      <QuoridorBoard
-        state={gameState}
-        wallMode={wallMode}
-        wallOrient={wallOrient}
-        onMove={onMove}
-        onWallPlace={onWallPlace}
-        animating={animating}
-        disabled={
-          (isAIMode(mode) && gameState.turn === 1) ||
-          (isOnlineMode(mode) && (gameState.turn !== onlineRole || botPlayers.includes(gameState.turn)))
-        }
-        targetingSkill={targetingSkill}
-        onSkillTarget={onSkillTarget}
-        boardViewerIndex={boardViewerIndex}
-        trapHitFlash={trapHitFlash}
-        onTreasureDig={isTreasureMode(mode) && isLocalTurn ? onDig : undefined}
-        treasureDigHighlight={canDigTreasure && onTreasureCell}
-      />
+      <div className="w-full flex justify-center shrink-0">
+        <QuoridorBoard
+          state={gameState}
+          wallMode={wallMode}
+          wallOrient={wallOrient}
+          onMove={onMove}
+          onWallPlace={onWallPlace}
+          animating={animating}
+          disabled={
+            (isAIMode(mode) && gameState.turn === 1) ||
+            (isOnlineMode(mode) && (gameState.turn !== onlineRole || botPlayers.includes(gameState.turn)))
+          }
+          targetingSkill={targetingSkill}
+          onSkillTarget={onSkillTarget}
+          boardViewerIndex={boardViewerIndex}
+          trapHitFlash={trapHitFlash}
+          onTreasureDig={isTreasureMode(mode) && isLocalTurn ? onDig : undefined}
+          treasureDigHighlight={canDigTreasure && onTreasureCell}
+        />
+      </div>
 
       {/* Treasure mode: skills */}
       {isTreasureMode(mode) && (
@@ -319,7 +321,7 @@ export function GameView({
       )}
 
       {/* Controls */}
-      <div className="flex flex-wrap justify-center gap-3 py-4 w-full">
+      <div className="flex flex-wrap justify-center gap-2 md:gap-3 py-3 md:py-4 w-full shrink-0">
         <button
           onClick={onToggleWallMode}
           className={cn(
