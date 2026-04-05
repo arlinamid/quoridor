@@ -10,7 +10,10 @@
 --                         so the client can surface the right error
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE OR REPLACE FUNCTION add_egg_to_wallet(
+-- Drop old void-returning version first so we can change the return type to TEXT
+DROP FUNCTION IF EXISTS add_egg_to_wallet(UUID, TEXT, INT);
+
+CREATE FUNCTION add_egg_to_wallet(
   p_user_id  UUID,
   p_egg_type TEXT,
   p_amount   INT DEFAULT 1
