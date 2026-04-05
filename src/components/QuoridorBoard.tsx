@@ -36,22 +36,22 @@ export function QuoridorBoard({
   treasureDigHighlight = true,
 }: BoardProps) {
   const n = state.playerCount ?? state.players.length;
-  // 3-4 player: same min as 2-player (fits mobile), higher vw% and max for desktop
+  // Mobil / keskeny képernyő: nagyobb minimum érintési cél (~40px+ mező, ~14px+ rések); md+ kompakt asztali rács.
   const cellCls = n >= 3
-    ? "w-[clamp(28px,8vw,60px)] h-[clamp(28px,8vw,60px)]"
-    : "w-[clamp(28px,6vw,48px)] h-[clamp(28px,6vw,48px)]";
+    ? "w-[clamp(36px,9vw,60px)] h-[clamp(36px,9vw,60px)] md:w-[clamp(28px,8vw,60px)] md:h-[clamp(28px,8vw,60px)]"
+    : "w-[clamp(36px,7.5vw,48px)] h-[clamp(36px,7.5vw,48px)] md:w-[clamp(28px,6vw,48px)] md:h-[clamp(28px,6vw,48px)]";
   const gapHCls = n >= 3
-    ? "w-[clamp(28px,8vw,60px)] h-[clamp(6px,1.5vw,10px)]"
-    : "w-[clamp(28px,6vw,48px)] h-[clamp(6px,1.5vw,8px)]";
+    ? "w-[clamp(36px,9vw,60px)] md:w-[clamp(28px,8vw,60px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,10px)]"
+    : "w-[clamp(36px,7.5vw,48px)] md:w-[clamp(28px,6vw,48px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,8px)]";
   const gapVCls = n >= 3
-    ? "w-[clamp(6px,1.5vw,10px)] h-[clamp(28px,8vw,60px)]"
-    : "w-[clamp(6px,1.5vw,8px)] h-[clamp(28px,6vw,48px)]";
+    ? "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,10px)] h-[clamp(36px,9vw,60px)] md:h-[clamp(28px,8vw,60px)]"
+    : "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,8px)] h-[clamp(36px,7.5vw,48px)] md:h-[clamp(28px,6vw,48px)]";
   const gapBothCls = n >= 3
-    ? "w-[clamp(6px,1.5vw,10px)] h-[clamp(6px,1.5vw,10px)]"
-    : "w-[clamp(6px,1.5vw,8px)] h-[clamp(6px,1.5vw,8px)]";
+    ? "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,10px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,10px)]"
+    : "w-[clamp(14px,3vw,18px)] md:w-[clamp(6px,1.5vw,8px)] h-[clamp(14px,3vw,18px)] md:h-[clamp(6px,1.5vw,8px)]";
   const pawnCls = n >= 3
-    ? "w-[clamp(20px,6vw,44px)] h-[clamp(20px,6vw,44px)]"
-    : "w-[clamp(20px,4.5vw,32px)] h-[clamp(20px,4.5vw,32px)]";
+    ? "w-[clamp(22px,6.5vw,44px)] h-[clamp(22px,6.5vw,44px)] md:w-[clamp(20px,6vw,44px)] md:h-[clamp(20px,6vw,44px)]"
+    : "w-[clamp(22px,5vw,32px)] h-[clamp(22px,5vw,32px)] md:w-[clamp(20px,4.5vw,32px)] md:h-[clamp(20px,4.5vw,32px)]";
   const [hoveredWall, setHoveredWall] = useState<Wall | null>(null);
 
   const validMoves = useMemo(() => {
@@ -249,7 +249,8 @@ export function QuoridorBoard({
               key={key}
               title={isOwnTreasureDig ? hu.game.digTapOwnCellHint : undefined}
               className={cn(
-                cellCls, "bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center",
+                cellCls,
+                "touch-manipulation select-none [-webkit-tap-highlight-color:transparent] bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center active:brightness-95",
                 r === 8 && "shadow-[inset_0_-3px_0_#e74c3c]",
                 r === 0 && "shadow-[inset_0_3px_0_#2c3e50]",
                 c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
@@ -286,7 +287,7 @@ export function QuoridorBoard({
               key={key}
               className={cn(
                 typeClass,
-                "cursor-pointer rounded-sm relative transition-colors duration-150",
+                "touch-manipulation select-none [-webkit-tap-highlight-color:transparent] cursor-pointer rounded-sm relative transition-colors duration-150 active:brightness-95",
                 wallMode ? "z-[10]" : "z-[1]",
                 isPlaced && !isTarget && "bg-[#e8b830] shadow-[0_0_8px_rgba(232,184,48,0.4)] z-10",
                 isTarget && "bg-[#e74c3c] shadow-[0_0_12px_rgba(231,76,60,0.8)] z-10",
@@ -305,9 +306,9 @@ export function QuoridorBoard({
   };
 
   return (
-    <div className="flex justify-center py-2">
-      <div className="bg-[#2a1810] p-3 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] relative">
-        <div className="grid grid-cols-[repeat(17,auto)] grid-rows-[repeat(17,auto)] gap-0 relative">
+    <div className="flex justify-center py-2 touch-manipulation select-none [-webkit-tap-highlight-color:transparent]">
+      <div className="bg-[#2a1810] p-2 md:p-3 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] relative">
+        <div className="grid grid-cols-[repeat(17,auto)] grid-rows-[repeat(17,auto)] gap-0 relative overscroll-contain">
           {renderGrid()}
           
           {/* Pawns */}
