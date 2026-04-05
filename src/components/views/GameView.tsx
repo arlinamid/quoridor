@@ -124,7 +124,6 @@ function SkillButton({ skill, canAct, hidden, active, onClick }: SkillButtonProp
 interface GameViewProps {
   gameState: GameState;
   mode: GameMode;
-  wallMode: boolean;
   animating: boolean;
   statusMsg: string;
   targetingSkill: SkillType | null;
@@ -132,7 +131,6 @@ interface GameViewProps {
   onlineRole: number;
   profile: Profile;
   playerProfiles: Record<number, Profile>;
-  onToggleWallMode: () => void;
   onMove: (r: number, c: number) => void;
   onWallPlace: (r: number, c: number, orient: 'h' | 'v') => void;
   onSkillTarget: (r: number, c: number) => void;
@@ -150,9 +148,9 @@ interface GameViewProps {
 }
 
 export function GameView({
-  gameState, mode, wallMode, animating, statusMsg, targetingSkill,
+  gameState, mode, animating, statusMsg, targetingSkill,
   timeLeft, onlineRole, profile, playerProfiles,
-  onToggleWallMode, onMove, onWallPlace, onSkillTarget,
+  onMove, onWallPlace, onSkillTarget,
   onSetTargetingSkill, onExecuteSkill, onDig, onNewGame, onMenu,
   boardViewerIndex, trapHitFlash, skillFx,
   easterEgg, onEasterEggCollect,
@@ -256,7 +254,7 @@ export function GameView({
       <div className="w-full min-w-0 flex justify-center shrink-0">
         <QuoridorBoard
           state={gameState}
-          wallMode={wallMode}
+          wallMode={false}
 
           onMove={onMove}
           onWallPlace={onWallPlace}
@@ -323,15 +321,6 @@ export function GameView({
 
       {/* Controls */}
       <div className="flex flex-wrap justify-center gap-2 md:gap-3 py-3 md:py-4 w-full shrink-0">
-        <button
-          onClick={onToggleWallMode}
-          className={cn(
-            "bg-[#241810]/90 border px-5 py-2 rounded-md text-sm transition-all",
-            wallMode ? "border-[#e8b830] text-[#e8b830] bg-[#e8b830]/10" : "border-white/10 text-[#a89078] hover:border-[#f0c866] hover:text-[#f0c866]"
-          )}
-        >
-          {hu.game.wallModeOn}
-        </button>
         <button
           onClick={onNewGame}
           className="bg-[#241810]/90 border border-white/10 text-[#a89078] px-5 py-2 rounded-md text-sm hover:border-[#f0c866] hover:text-[#f0c866] transition-all"

@@ -36,7 +36,6 @@ export default function App() {
   const [mode, setMode] = useState<GameMode>('pvp');
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [gameState, setGameState] = useState<GameState>(initState());
-  const [wallMode, setWallMode] = useState(false);
   const [animating, setAnimating] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [targetingSkill, setTargetingSkill] = useState<SkillType | null>(null);
@@ -640,7 +639,7 @@ export default function App() {
     // Use current loadout from ref to avoid stale closure
     const currentLoadout = skillLoadoutRef.current;
     setGameState(initState(isTreasureMode(selectedMode), 2, currentLoadout.length > 0 ? currentLoadout : undefined));
-    setWallMode(false); setAnimating(false); setTimeLeft(120);
+    setAnimating(false); setTimeLeft(120);
     setView('game');
   }, [onlineGameId]);
 
@@ -1025,7 +1024,6 @@ export default function App() {
               key="game"
               gameState={gameState}
               mode={mode}
-              wallMode={wallMode}
               animating={animating}
               statusMsg={statusMsg}
               targetingSkill={targetingSkill}
@@ -1036,7 +1034,6 @@ export default function App() {
               boardViewerIndex={isOnlineMode(mode) ? onlineRole : isAIMode(mode) ? 0 : null}
               trapHitFlash={trapHitFlash}
               skillFx={skillFx}
-              onToggleWallMode={() => setWallMode(w => !w)}
               onMove={executeMove}
               onWallPlace={executeWall}
               onSkillTarget={(r, c) => executeSkill(targetingSkill!, { r, c })}
