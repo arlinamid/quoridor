@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Move, Shield, Target, Timer, Users, MapPin, Sparkles, ShoppingBag, Gift, Skull,
+  Move, Shield, Target, Timer, Users, MapPin, Sparkles, ShoppingBag, Gift, Skull, Swords,
 } from 'lucide-react';
 
 /** Szabályok fő szövegtörzs (fejléc / vissza a Rules.tsx-ben marad). */
@@ -27,9 +27,9 @@ export function RulesScrollableContent() {
           Játékmódok
         </h3>
         <ul className="list-disc list-inside space-y-2 ml-2 leading-relaxed">
-          <li><strong>Helyi 2 fős</strong> — klasszikus vagy <strong>Kincskereső</strong> (lásd lent).</li>
-          <li><strong>Gép ellen</strong> — nehézség: könnyű / közepes / nehéz; a gép mozgást és falat is választ.</li>
-          <li><strong>Online</strong> — lobby, 2–4 játékos, opcionális bot slotok; ugyanaz a szabályrendszer, állapot szinkron. <strong>Csapat mód</strong> (3–4 fő): 3 játékosnál <strong>1+2</strong> (P1 vs P2+P3) vagy <strong>2+1</strong> (P1+P2 vs P3); 4 játékosnál <strong>2–2</strong> (P1+P2 vs P3+P4). Győzelem: ha a csapatod bármelyik bábuja eléri a saját céloldalát, mindannyian nyertesként számítotok.</li>
+          <li><strong>Helyi 2 fős</strong> — klasszikus, <strong>Kincskereső</strong> vagy <strong>Battlefield</strong> (lásd lent).</li>
+          <li><strong>Gép ellen</strong> — nehézség: könnyű / közepes / nehéz; a gép mozgást és falat is választ (Normal, Kincskereső vagy Battlefield).</li>
+          <li><strong>Online</strong> — lobby, 2–4 játékos, opcionális bot slotok; külön várakozó lista <strong>Normal</strong>, <strong>Kincskereső</strong> és <strong>Battlefield</strong> módokhoz. <strong>Csapat mód</strong> (3–4 fő): 3 játékosnál <strong>1+2</strong> (P1 vs P2+P3) vagy <strong>2+1</strong> (P1+P2 vs P3); 4 játékosnál <strong>2–2</strong> (P1+P2 vs P3+P4). Győzelem: ha a csapatod bármelyik bábuja eléri a saját céloldalát, mindannyian nyertesként számítotok.</li>
         </ul>
       </section>
 
@@ -53,7 +53,8 @@ export function RulesScrollableContent() {
         <ul className="list-disc list-inside space-y-2 ml-4">
           <li>Vízszintesen vagy függőlegesen <strong>egy</strong> mező; <strong>átló tilos</strong>.</li>
           <li>A falakon nem lehet átlépni (kivéve <strong>Vakond</strong> effekt alatt).</li>
-          <li><strong>Ugrás:</strong> ha az ellenfél közvetlenül melletted van és nincs köztetek fal, <strong>átugorhatod</strong> — egyenes irányban a túloldalra, vagy „oldalra kitérő” ugrás, ha a közvetlen hátsó mező foglalt vagy fal miatt nem járható.</li>
+          <li><strong>Árokmezők</strong> (Battlefield mód): a sötét, „mély” cellák <strong>tilosak</strong> — ide nem léphetsz, nem ugorhatsz, és ide nem teleportálhatsz / nem húz a mágnes.</li>
+          <li><strong>Ugrás:</strong> ha az ellenfél közvetlenül melletted van és nincs köztetek fal, <strong>átugorhatod</strong> — egyenes irányban a túloldalra, vagy „oldalra kitérő” ugrás, ha a közvetlen hátsó mező foglalt vagy fal miatt nem járható. Az ugrás célmező sem lehet árok.</li>
         </ul>
       </section>
 
@@ -63,7 +64,8 @@ export function RulesScrollableContent() {
           Falak
         </h3>
         <ul className="list-disc list-inside space-y-2 ml-4">
-          <li><strong>Kezdő falak száma:</strong> 2 játékos — <strong>10–10</strong>; 3 játékos — <strong>7</strong>; 4 játékos — <strong>5</strong> (játékosonként).</li>
+          <li><strong>Kezdő falak száma (klasszikus / Kincskereső):</strong> 2 játékos — <strong>10–10</strong>; 3 játékos — <strong>7</strong>; 4 játékos — <strong>5</strong> (játékosonként).</li>
+          <li><strong>Battlefield módban:</strong> 2 játékos — <strong>5</strong>; 3 játékos — <strong>4</strong>; 4 játékos — <strong>3</strong> fal játékosonként.</li>
           <li>A fal <strong>két mező hosszú</strong>, a rácsvonalakra kerül. <strong>Ráskattintás</strong> is lerakhat falat (vízszintes / függőleges sávnál a rács alapján jó irány); a <strong>Fal lerakása</strong> módban a <strong>Forgatás</strong> a sarokrésekhez kell. Ha egy rés <strong>közvetlenül a bábud és egy zöld (léphető) mező között</strong> van, csak fal-módban rakunk oda falat — így a lépés és a fal nem keveredik össze.</li>
           <li>Nem metszhetik / fedhetik egymást; lerakás után fix.</li>
           <li><strong>Tilos olyan falat lerakni, amivel bármely játékos elvágná az összes útvonalat a saját célvonalához.</strong> A játék ezt nem engedi.</li>
@@ -97,7 +99,23 @@ export function RulesScrollableContent() {
         <ul className="list-disc list-inside space-y-2 ml-4 leading-relaxed">
           <li>A pályán <strong>?</strong> jelű kincsek jelennek meg; a győzelmi szabály ugyanaz (célvonal).</li>
           <li>Ha a bábud <strong>kincs mezőjén áll</strong> a saját körödben: <strong>érintsd meg újra ugyanazt a mezőt</strong>, ha ki szeretnéd ásni — <strong>véletlen speciális képesség</strong> kerül a készletedbe (ha van hely; tele készletnél üzenet). Ha inkább <strong>máshova lépsz</strong> vagy falat raksz, az ásás <strong>kimarad</strong>, a kincs a táblán marad.</li>
-          <li><strong>Csapdák</strong> csak kincsmódban: üres mezőre helyezhetők; az ellenfélnek rejtettek; rálépéskor vagy oda kerüléskor <strong>visszakerülsz a saját startmeződre</strong>.</li>
+          <li><strong>Csapdák</strong> kincs-alapú módokban: üres, nem árok mezőre helyezhetők; rálépéskor <strong>visszakerülsz a saját startmeződre</strong>. <strong>Klasszikus Kincskereső + csapat:</strong> a csapattársad látja a csapda jelölőt. <strong>Battlefield:</strong> minden más játékosnak rejtett — <strong>csak a lerakó</strong> látja a ⚠ jelet a táblán.</li>
+        </ul>
+      </section>
+
+      <section className="bg-[#ea580c]/10 border border-[#ea580c]/30 p-5 rounded-xl">
+        <h3 className="text-xl font-bold text-[#fb923c] mb-3 flex items-center gap-2">
+          <Swords size={22} />
+          Battlefield mód
+        </h3>
+        <p className="leading-relaxed mb-3">
+          A <strong>Kincskereső</strong> szabályait viszi tovább (kincsek, ásás, skillek, győzelem: célvonal), de a pályán <strong>árokmezők</strong> is vannak, és más a faljuttatás.
+        </p>
+        <ul className="list-disc list-inside space-y-2 ml-2 leading-relaxed text-[#c8b090]">
+          <li><strong>Árkok:</strong> előre generált, Tetris-szerű <strong>I / L / T</strong> alakzatok (többféle elforgatás); ezekre a cellákra <strong>lépni nem lehet</strong> (sem sima lépéssel, sem ugrással). A <strong>Teleport</strong> és a <strong>Csapda</strong> sem célozhat árkot.</li>
+          <li><strong>Kincsek</strong> soha nem kerülnek árokmezőre.</li>
+          <li><strong>Ásás:</strong> a kincsből <strong>nem</strong> kaphatsz <strong>TRAP (Csapda)</strong> skillt; induláskor a saját loadoutod <strong>TRAP</strong> nélkül töltődik be (P0), ha Battlefieldet játszol.</li>
+          <li><strong>AI (gép / online bot):</strong> az útvonalkeresés figyelembe veszi az árkokat; árokos pályán a döntésnél előnyben részesíti a nagyobb <strong>mobilitást</strong> és a kevésbé „szorított” mezőket.</li>
         </ul>
       </section>
 
@@ -123,9 +141,9 @@ export function RulesScrollableContent() {
               <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#facc15]">Átugrás (SKIP)</td><td className="p-2">A <strong>körrend szerinti következő</strong> játékos (2–4 főnél is) <strong>kihagy egy kört</strong>.</td></tr>
               <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#34d399]">Pajzs</td><td className="p-2"><strong>2 játékos:</strong> az ellenfél nem tehet bizonyos <strong>vízszintes</strong> falakat a bábuja elé; több körön át (effekt időzítés a motorban).</td></tr>
               <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#a3e635]">Vakond</td><td className="p-2">Egy körben <strong>átsétálhatsz a falakon</strong> (mozgásnál).</td></tr>
-              <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#a78bfa]">Teleport</td><td className="p-2">Ugrás egy üres mezőre <strong>legfeljebb 2 távolságra</strong> (Manhattan); cél kijelölése szükséges.</td></tr>
-              <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#60a5fa]">Mágnes</td><td className="p-2">Minden <strong>másik</strong> játékost egyenként <strong>feléd húz</strong> vízszintesen vagy függőlegesen: ha |sor-különbség| &gt; |oszlop-különbség|, a sor mentén mozdul el max. 2 mezőt (különben az oszlop mentén). Ha a célmező foglalt, az adott bábu nem mozdul.</td></tr>
-              <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#f472b6]">Csapda</td><td className="p-2">Üres mezőre helyezhető (cél kijelölés); az ellenfélnek rejtett; rálépéskor <strong>startmezőre</strong> kerülsz.</td></tr>
+              <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#a78bfa]">Teleport</td><td className="p-2">Ugrás egy üres mezőre <strong>legfeljebb 2 távolságra</strong> (Manhattan); cél kijelölése szükséges. <strong>Árokra nem.</strong></td></tr>
+              <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#60a5fa]">Mágnes</td><td className="p-2">Minden <strong>másik</strong> játékost egyenként <strong>feléd húz</strong> vízszintesen vagy függőlegesen: ha |sor-különbség| &gt; |oszlop-különbség|, a sor mentén mozdul el max. 2 mezőt (különben az oszlop mentén). Ha a célmező foglalt <strong>vagy árok</strong>, az adott bábu nem mozdul.</td></tr>
+              <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#f472b6]">Csapda</td><td className="p-2">Üres, <strong>nem árok</strong> mezőre helyezhető (cél kijelölés); rejtett ellenfeleknek (Battlefield: csak a lerakó látja); rálépéskor <strong>startmezőre</strong> kerülsz.</td></tr>
               <tr className="border-b border-white/5"><td className="p-2 font-semibold text-[#ef4444]">Dinamit</td><td className="p-2">Robbantás egy megjelölt középpont körül: a <strong>3×3 területhez csatlakozó falak</strong> eltűnnek.</td></tr>
               <tr><td className="p-2 font-semibold text-[#22d3ee]">Csere (SWAP)</td><td className="p-2"><strong>Véletlenszerűen</strong> kiválasztott <strong>másik</strong> játékossal megcseréled a pozíciódat (2–4 fő). Csapda / start szabályok utána lefutnak.</td></tr>
             </tbody>

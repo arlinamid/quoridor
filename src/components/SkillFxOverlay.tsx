@@ -39,14 +39,16 @@ interface Props {
   gapPx: number;
 }
 
-export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
-  const step = cellPx + gapPx;
+export function SkillFxOverlay({ fx, cellPx: rawCellPx, gapPx: rawGapPx }: Props) {
+  const px = Math.max(4, Number.isFinite(rawCellPx) && rawCellPx > 0 ? rawCellPx : 26);
+  const gpx = Number.isFinite(rawGapPx) && rawGapPx >= 0 ? rawGapPx : px * (14 / 36);
+  const step = px + gpx;
   const color = SKILL_COLORS[fx.skill];
-  const boardSize = 9 * cellPx + 8 * gapPx;
+  const boardSize = 9 * px + 8 * gpx;
 
   // Pixel center of board cell (r, c) within the grid coordinate system
-  const cxOf = (c: number) => c * step + cellPx / 2;
-  const cyOf = (r: number) => r * step + cellPx / 2;
+  const cxOf = (c: number) => c * step + px / 2;
+  const cyOf = (r: number) => r * step + px / 2;
 
   const { actorPos: ap, target: tp, partnerPos: pp, opponents: ops } = fx;
   const ar = ap.r, ac = ap.c;
@@ -61,10 +63,10 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
         position: 'absolute',
         left: c * step,
         top: r * step,
-        width: cellPx,
-        height: cellPx,
+        width: px,
+        height: px,
         borderRadius: '50%',
-        border: `${Math.max(1.5, cellPx * 0.055)}px solid ${col}`,
+        border: `${Math.max(1.5, px * 0.055)}px solid ${col}`,
         pointerEvents: 'none',
       }}
       initial={{ scale: 0.35, opacity: 0.9 }}
@@ -81,8 +83,8 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
         position: 'absolute',
         left: c * step,
         top: r * step,
-        width: cellPx,
-        height: cellPx,
+        width: px,
+        height: px,
         borderRadius: '50%',
         background: `radial-gradient(circle, ${col}bb 0%, ${col}22 60%, transparent 100%)`,
         pointerEvents: 'none',
@@ -97,7 +99,7 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
   const sparks = (r: number, c: number, count: number, dist = 1.0, col = color, phase = fx.phase) =>
     Array.from({ length: count }, (_, i) => {
       const angle = (i / count) * Math.PI * 2;
-      const sz = Math.max(3, cellPx * 0.15);
+      const sz = Math.max(3, px * 0.15);
       return (
         <motion.div
           key={`spark-${r}-${c}-${i}-${phase}`}
@@ -109,13 +111,13 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
             height: sz,
             borderRadius: '50%',
             background: col,
-            boxShadow: `0 0 ${cellPx * 0.28}px ${col}`,
+            boxShadow: `0 0 ${px * 0.28}px ${col}`,
             pointerEvents: 'none',
           }}
           initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
           animate={{
-            x: Math.cos(angle) * cellPx * dist,
-            y: Math.sin(angle) * cellPx * dist,
+            x: Math.cos(angle) * px * dist,
+            y: Math.sin(angle) * px * dist,
             opacity: 0,
             scale: 0,
           }}
@@ -141,13 +143,13 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
     const x1 = cxOf(c1), y1 = cyOf(r1);
     const x2 = cxOf(c2), y2 = cyOf(r2);
     const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2 - cellPx * 1.4;
+    const my = (y1 + y2) / 2 - px * 1.4;
     return (
       <motion.path
         key={key}
         d={`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`}
         stroke={color}
-        strokeWidth={Math.max(1.5, cellPx * 0.055)}
+        strokeWidth={Math.max(1.5, px * 0.055)}
         fill="none"
         strokeDasharray={dashed ? '7 4' : undefined}
         initial={{ pathLength: 0, opacity: 0 }}
@@ -163,7 +165,7 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
       key={key}
       d={`M ${cxOf(c1)} ${cyOf(r1)} L ${cxOf(c2)} ${cyOf(r2)}`}
       stroke={color}
-      strokeWidth={Math.max(1.5, cellPx * 0.05)}
+      strokeWidth={Math.max(1.5, px * 0.05)}
       fill="none"
       strokeDasharray="5 3"
       initial={{ pathLength: 0, opacity: 0 }}
@@ -185,13 +187,22 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
             {tp && svgLayer(
               <>
                 {arc(ar, ac, tp.r, tp.c, true, 'tp-arc')}
-                <motion.circle
-                  cx={cxOf(tp.c)} cy={cyOf(tp.r)} r={0}
-                  fill="none" stroke={color}
-                  strokeWidth={Math.max(1.5, cellPx * 0.055)}
-                  animate={{ r: [0, cellPx * 0.44, 0] }}
-                  transition={{ duration: 0.42, delay: 0.15, ease: 'easeOut' }}
-                />
+                <g transform={`translate(${cxOf(tp.c)} ${cyOf(tp.r)})`}>
+                  <motion.g
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1, 0] }}
+                    transition={{ duration: 0.42, delay: 0.15, ease: 'easeOut' }}
+                  >
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={Math.max(2, px * 0.44)}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={Math.max(1.5, px * 0.055)}
+                    />
+                  </motion.g>
+                </g>
               </>
             )}
           </>
@@ -238,26 +249,39 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
             {glow(ar, ac, 'g-actor', 1.9)}
             {svgLayer(
               <>
-                <motion.circle
-                  cx={cxOf(ac)} cy={cyOf(ar)}
-                  stroke={color}
-                  strokeWidth={Math.max(2, cellPx * 0.07)}
-                  fill="none"
-                  animate={{ r: [0, cellPx * 0.82] }}
-                  transition={{ duration: 0.42, ease: 'easeOut' }}
-                  r={0}
-                />
-                <motion.circle
-                  cx={cxOf(ac)} cy={cyOf(ar)}
-                  stroke={`${color}55`}
-                  strokeWidth={Math.max(1, cellPx * 0.04)}
-                  fill="none"
-                  strokeDasharray="4 3"
-                  r={0}
-                  initial={{ opacity: 0 }}
-                  animate={{ r: [0, cellPx * 1.12], opacity: [0, 0.8, 0] }}
-                  transition={{ duration: 0.5, delay: 0.1 }}
-                />
+                <g transform={`translate(${cxOf(ac)} ${cyOf(ar)})`}>
+                  <motion.g
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [0, 1] }}
+                    transition={{ duration: 0.42, ease: 'easeOut' }}
+                  >
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={Math.max(2, px * 0.82)}
+                      stroke={color}
+                      strokeWidth={Math.max(2, px * 0.07)}
+                      fill="none"
+                    />
+                  </motion.g>
+                </g>
+                <g transform={`translate(${cxOf(ac)} ${cyOf(ar)})`}>
+                  <motion.g
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: [0, 1], opacity: [0, 0.8, 0] }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                  >
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={Math.max(2, px * 1.12)}
+                      stroke={`${color}55`}
+                      strokeWidth={Math.max(1, px * 0.04)}
+                      fill="none"
+                      strokeDasharray="4 3"
+                    />
+                  </motion.g>
+                </g>
               </>
             )}
           </>
@@ -272,9 +296,9 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
                 key={`wplus-${i}`}
                 style={{
                   position: 'absolute',
-                  left: cxOf(ac) - cellPx * 0.13 + (i - 1) * cellPx * 0.3,
+                  left: cxOf(ac) - px * 0.13 + (i - 1) * px * 0.3,
                   top: cyOf(ar),
-                  fontSize: Math.max(10, cellPx * 0.38),
+                  fontSize: Math.max(10, px * 0.38),
                   color,
                   fontWeight: 'bold',
                   textShadow: `0 0 8px ${color}`,
@@ -282,7 +306,7 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
                   lineHeight: 1,
                 }}
                 initial={{ y: 0, opacity: 1 }}
-                animate={{ y: -cellPx * 0.8, opacity: 0 }}
+                animate={{ y: -px * 0.8, opacity: 0 }}
                 transition={{ duration: 0.42, delay: i * 0.07, ease: 'easeOut' }}
               >
                 +
@@ -394,10 +418,10 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
                   position: 'absolute',
                   left: tp.c * step,
                   top: tp.r * step,
-                  width: cellPx,
-                  height: cellPx,
+                  width: px,
+                  height: px,
                   borderRadius: '50%',
-                  border: `${Math.max(2, cellPx * 0.07)}px solid ${i === 0 ? '#ef4444' : i === 1 ? '#f97316' : '#fbbf24'}`,
+                  border: `${Math.max(2, px * 0.07)}px solid ${i === 0 ? '#ef4444' : i === 1 ? '#f97316' : '#fbbf24'}`,
                   pointerEvents: 'none',
                 }}
                 initial={{ scale: 0.2, opacity: 1 }}
@@ -415,9 +439,11 @@ export function SkillFxOverlay({ fx, cellPx, gapPx }: Props) {
             {ring(ar, ac, 1, 2.1)}
             {svgLayer(
               <motion.circle
-                cx={cxOf(ac)} cy={cyOf(ar)} r={cellPx * 0.82}
+                cx={cxOf(ac)}
+                cy={cyOf(ar)}
+                r={Math.max(2, px * 0.82)}
                 stroke={color}
-                strokeWidth={Math.max(2, cellPx * 0.07)}
+                strokeWidth={Math.max(2, px * 0.07)}
                 fill={`${color}15`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 1, 0.55, 0] }}

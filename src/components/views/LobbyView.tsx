@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, User, Map, Play, Users, Bot, X } from 'lucide-react';
+import { ArrowLeft, User, Map, Play, Users, Bot, X, Swords } from 'lucide-react';
 import { GameMode } from '../../lib/types';
 import { Profile } from '../../lib/supabase';
 import { countFilledOnlineSlots } from '../../lib/onlineLobby';
@@ -52,6 +52,19 @@ function fmt(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** Várakozó játéklista: klasszikus / kincs / battlefield szétválasztása. */
+function waitingRowMatchesMode(
+  mode: GameMode,
+  g: { state?: { treasureMode?: boolean; battlefieldMode?: boolean } }
+): boolean {
+  const tm = Boolean(g.state?.treasureMode);
+  const bf = Boolean(g.state?.battlefieldMode);
+  if (mode === 'battlefield-online') return bf;
+  if (mode === 'treasure-online') return tm && !bf;
+  if (mode === 'online') return !tm && !bf;
+  return true;
+}
+
 function teamLayoutLabel(layout: OnlineTeamLayoutId, cap: number): string {
   if (layout === 'ffa' || cap < 3) return hu.lobby.teamFfa;
   if (cap === 3) {
@@ -81,11 +94,9 @@ export function LobbyView({
     ? teamLayout
     : ((hostedGameData?.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? 'ffa');
 
-  // Filter lobby to same mode
-  const activeGames = waitingGames.filter(g => {
-    const sameTreasure = Boolean(g.state?.treasureMode) === (mode === 'treasure-online');
-    return lobbyUsers.has(g.player1_id) && sameTreasure;
-  });
+  const activeGames = waitingGames.filter(
+    g => lobbyUsers.has(g.player1_id) && waitingRowMatchesMode(mode, g)
+  );
 
   const previewTeams = lobbyCap >= 3 ? teamsForOnlineLayout(effectiveTeamLayout, lobbyCap) : undefined;
 
@@ -160,6 +171,11 @@ export function LobbyView({
             {mode === 'treasure-online' && (
               <div className="flex items-center gap-1 text-[#e8b830] text-xs mt-1 uppercase tracking-wider">
                 <Map size={12} /> {hu.lobby.treasureModeSubtitle}
+              </div>
+            )}
+            {mode === 'battlefield-online' && (
+              <div className="flex items-center gap-1 text-[#fb923c] text-xs mt-1 uppercase tracking-wider">
+                <Swords size={12} /> {hu.lobby.battlefieldModeSubtitle}
               </div>
             )}
           </div>
@@ -346,7 +362,12 @@ export function LobbyView({
                           <div>
                             <span className="font-bold tracking-wider">{g.player1?.username || hu.common.unknown}</span>
                             <div className="flex items-center gap-2 mt-0.5">
-                              {g.state?.treasureMode && (
+                              {g.state?.battlefieldMode && (
+                                <span className="flex items-center gap-1 text-[#fb923c] text-[10px] uppercase tracking-wider">
+                                  <Swords size={10} /> {hu.lobby.battlefieldBadge}
+                                </span>
+                              )}
+                              {g.state?.treasureMode && !g.state?.battlefieldMode && (
                                 <span className="flex items-center gap-1 text-[#e8b830] text-[10px] uppercase tracking-wider">
                                   <Map size={10} /> {hu.lobby.treasureBadge}
                                 </span>

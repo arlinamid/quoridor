@@ -2,7 +2,24 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
-**Éles:** **0.6.3** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.2** (2026-04-05).
+**Éles:** **0.6.4** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.3** (2026-04-05).
+
+---
+
+## [0.6.4] — 2026-04-05
+
+### Added
+- **Battlefield mód** (`battlefield-pvp`, `battlefield-ai`, `battlefield-online`) — a Kincskereső szabályai (kincsek, ásás, skillek, célvonal) + **árokmezők**: előre generált Tetris-szerű **I / L / T** tetrominók (`src/game/battlefield.ts`, `generateBattlefieldTrenches`). Árokra nem lehet lépni / ugrani; **Teleport** és **TRAP** cél tiltva; **MAGNET** nem húz árokra; **kincsek** nem kerülnek árokra. **Kezdő falak:** 2 játékos **5**, 3 játékos **4**, 4 játékos **3** / fő. **Csapdák:** Battlefield alatt minden ellenfélnek rejtettek — csak a **lerakó** látja a jelölőt (csapattárs sem). **Ásás** skill poolból és **P0 loadoutból** kiesik a **TRAP**.
+- **`GameMode` / típusok** — `usesTreasureRules`, `isBattlefieldMode`; `initState(..., { battlefield })`; `GameState.battlefieldMode`, `trenches`.
+- **Menü / lobby / játék** — Battlefield gombok (`MenuView`), várakozó játék szűrés és badge (`LobbyView`), `usesTreasureRules` a `GameView`-ban; `App.tsx` online create/start/rejoin/auto-start + ásás pool + loadout TRAP szűrés.
+- **`QuoridorBoard`** — árok cellák vizuális megkülönböztetése; TELEPORT/TRAP célkijelölés árok nélkül.
+
+### Changed
+- **AI árokos pályán** (`logic.ts`) — `orthoTrenchNeighborCount`; **ev** / **evHard** bónusz/büntetés árok-szomszédságra és erősebb mobilitás-súly; **orderedPawnMoves** döntetlennél: több utólagos lépés, kevesebb árok szomszéd; **greedyBotMove**: mobilitás és „nyitott” mező preferencia. Új tesztek: `orthoTrenchNeighborCount`, battlefield init / árok / TRAP láthatóság.
+
+### Docs
+- **Szabályok** (`RulesBody.tsx`) — Battlefield szekció, falak táblázat bővítése, mozgás/ágás/teleport/mágnes/csapda pontosítások.
+- **README.md** — játékmód táblázat, Battlefield összefoglaló, `battlefield.ts` a struktúrában.
 
 ---
 

@@ -1,3 +1,5 @@
+import { generateBattlefieldTrenches } from './battlefield';
+
 export type SkillType = 'TELEPORT' | 'HAMMER' | 'SKIP' | 'MOLE' | 'DYNAMITE' | 'SHIELD' | 'WALLS' | 'MAGNET' | 'TRAP' | 'SWAP';
 
 /** Kincsmód: egyszerre max. ennyi skill fér a készleten (5. szinttől 3 = Gamepass, alatta 2). */
@@ -32,6 +34,8 @@ export type GameState = {
   gameOver: boolean;
   lastMoveTime?: number;
   treasureMode?: boolean;
+  /** Battlefield: rejtett csapdák csak tulajnak, max fal 5/4/3, árok, kincsben nincs TRAP. */
+  battlefieldMode?: boolean;
   playerCount?: number;
   botPlayers?: number[];   // indices of bot-controlled players
   /** Online team mode: same length as players, 0 = team A, 1 = team B. Omitted = free-for-all. */
@@ -40,7 +44,30 @@ export type GameState = {
   pendingTeamLayout?: OnlineTeamLayoutId;
   treasures?: { r: number; c: number }[];
   traps?: { r: number; c: number; owner: number }[];
+  /** Nem léphető cellák (Tetris-I/L/T árkok). */
+  trenches?: { r: number; c: number }[];
 };
+
+export type InitStateOptions = { battlefield?: boolean };
+
+export function isTrenchCell(s: GameState, r: number, c: number): boolean {
+  return s.trenches?.some(t => t.r === r && t.c === c) ?? false;
+}
+
+/** Hány szomszédos (ortogonális) mező árok — az AI így „látja”, mennyire szűk a hely. */
+export function orthoTrenchNeighborCount(s: GameState, r: number, c: number): number {
+  if (!s.trenches?.length) return 0;
+  let n = 0;
+  for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+    const nr = r + dr, nc = c + dc;
+    if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9 && isTrenchCell(s, nr, nc)) n++;
+  }
+  return n;
+}
+
+function trenchAwareAi(s: GameState): boolean {
+  return (s.trenches?.length ?? 0) > 0;
+}
 
 /** P1 egyedül vs P2+P3 | P1+P2 vs P3 egyedül | 4 fő: P1+P2 vs P3+P4 */
 export function teamsForOnlineLayout(layout: OnlineTeamLayoutId, playerCount: number): number[] | undefined {
@@ -67,6 +94,7 @@ export function viewerSharesWin(teams: number[] | undefined, winnerIdx: number, 
 /** Üres mező, nincs bábu, nincs még csapda ezen a cellán. */
 export function isValidTrapPlacement(s: GameState, r: number, c: number): boolean {
   if (r < 0 || r >= 9 || c < 0 || c >= 9) return false;
+  if (isTrenchCell(s, r, c)) return false;
   if (s.players.some(pl => pl.r === r && pl.c === c)) return false;
   if (s.traps?.some(t => t.r === r && t.c === c)) return false;
   return true;
@@ -83,6 +111,7 @@ export function trapAffectsVictim(s: GameState, trapOwner: number, victimIdx: nu
 
 /** Kinek látszik a csapda a táblán a lehelyezés után (ellenfélnek nem, csak „belépésre” derül ki). */
 export function viewerSeesTrapMarker(s: GameState, viewerIdx: number, trapOwner: number): boolean {
+  if (s.battlefieldMode) return viewerIdx === trapOwner;
   if (isTeamGameState(s) && s.teams && s.teams.length === s.players.length) {
     return s.teams[viewerIdx] === s.teams[trapOwner];
   }
@@ -94,11 +123,26 @@ export function hasWon(p: Player): boolean {
          (p.goalCol !== undefined && p.c === p.goalCol);
 }
 
-export function initState(treasureMode = false, playerCount = 2, loadout?: SkillType[], teams?: number[]): GameState {
-  const wallCount = playerCount === 4 ? 5 : playerCount === 3 ? 7 : 10;
+export function initState(
+  treasureMode = false,
+  playerCount = 2,
+  loadout?: SkillType[],
+  teams?: number[],
+  options?: InitStateOptions
+): GameState {
+  const battlefield = Boolean(options?.battlefield);
+  const effectiveTreasure = treasureMode || battlefield;
+
+  const wallCount = battlefield
+    ? playerCount === 4 ? 3 : playerCount === 3 ? 4 : 5
+    : playerCount === 4 ? 5 : playerCount === 3 ? 7 : 10;
+
+  const inv0 = loadout
+    ? (battlefield ? loadout.filter(s => s !== 'TRAP') : [...loadout]).slice(0, 3)
+    : [];
 
   const players: Player[] = [
-    { r: 0, c: 4, walls: wallCount, goalRow: 8, inventory: loadout ? [...loadout].slice(0, 3) : [], effects: [] },
+    { r: 0, c: 4, walls: wallCount, goalRow: 8, inventory: [...inv0], effects: [] },
     { r: 8, c: 4, walls: wallCount, goalRow: 0, inventory: [], effects: [] },
   ];
   if (playerCount >= 3) players.push({ r: 4, c: 0, walls: wallCount, goalCol: 8, inventory: [], effects: [] });
@@ -110,7 +154,8 @@ export function initState(treasureMode = false, playerCount = 2, loadout?: Skill
     turn: 0,
     gameOver: false,
     lastMoveTime: undefined,
-    treasureMode,
+    treasureMode: effectiveTreasure,
+    battlefieldMode: battlefield,
     playerCount,
   };
 
@@ -118,12 +163,18 @@ export function initState(treasureMode = false, playerCount = 2, loadout?: Skill
     state.teams = [...teams];
   }
 
-  if (treasureMode) {
-    const treasureCount = playerCount * 2; // 4 / 6 / 8 for 2/3/4 players
+  if (battlefield) {
+    state.trenches = generateBattlefieldTrenches(playerCount, Math.random);
+  }
+
+  if (effectiveTreasure) {
+    const trenchKeys = new Set((state.trenches ?? []).map(t => `${t.r},${t.c}`));
+    const treasureCount = playerCount * 2;
     state.treasures = [];
     while (state.treasures.length < treasureCount) {
       const r = Math.floor(Math.random() * 7) + 1;
       const c = Math.floor(Math.random() * 9);
+      if (trenchKeys.has(`${r},${c}`)) continue;
       if (!state.treasures.some(t => t.r === r && t.c === c)) {
         state.treasures.push({ r, c });
       }
@@ -216,6 +267,7 @@ export function getValidMoves(s: GameState, pi: number) {
       const jr = nr + dr, jc = nc + dc;
       if (jr >= 0 && jr < 9 && jc >= 0 && jc < 9
           && !isBlocked(s, nr, nc, jr, jc, hasMole)
+          && !isTrenchCell(s, jr, jc)
           && !others.some(o => o.r === jr && o.c === jc)) {
         mv.push({ r: jr, c: jc });
       } else {
@@ -225,6 +277,7 @@ export function getValidMoves(s: GameState, pi: number) {
           const sr = nr + sdr, sc = nc + sdc;
           if (sr >= 0 && sr < 9 && sc >= 0 && sc < 9
               && !isBlocked(s, nr, nc, sr, sc, hasMole)
+              && !isTrenchCell(s, sr, sc)
               && !others.some(o => o.r === sr && o.c === sc)
               && !(sr === p.r && sc === p.c)) {
             mv.push({ r: sr, c: sc });
@@ -232,7 +285,7 @@ export function getValidMoves(s: GameState, pi: number) {
         }
       }
     } else {
-      mv.push({ r: nr, c: nc });
+      if (!isTrenchCell(s, nr, nc)) mv.push({ r: nr, c: nc });
     }
   }
   return mv;
@@ -273,12 +326,14 @@ export function cloneS(s: GameState): GameState {
     gameOver: s.gameOver,
     lastMoveTime: s.lastMoveTime,
     treasureMode: s.treasureMode,
+    battlefieldMode: s.battlefieldMode,
     playerCount: s.playerCount,
     botPlayers: s.botPlayers ? [...s.botPlayers] : undefined,
     teams: s.teams ? [...s.teams] : undefined,
     pendingTeamLayout: s.pendingTeamLayout,
     treasures: s.treasures ? s.treasures.map(t => ({ ...t })) : undefined,
-    traps: s.traps ? s.traps.map(t => ({ ...t })) : undefined
+    traps: s.traps ? s.traps.map(t => ({ ...t })) : undefined,
+    trenches: s.trenches ? s.trenches.map(t => ({ ...t })) : undefined,
   };
 }
 
@@ -295,7 +350,7 @@ export function bfsDist(s: GameState, pi: number) {
         (p.goalCol !== undefined && c === p.goalCol)) return d;
     for (const [dr, dc] of ds) {
       const nr = r + dr, nc = c + dc;
-      if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9 || vis.has(nr * 9 + nc) || isBlocked(s, r, c, nr, nc)) continue;
+      if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9 || vis.has(nr * 9 + nc) || isBlocked(s, r, c, nr, nc) || isTrenchCell(s, nr, nc)) continue;
       vis.add(nr * 9 + nc);
       q.push({ r: nr, c: nc, d: d + 1 });
     }
@@ -322,6 +377,15 @@ export function applySkill(
 ): ApplySkillResult {
   if (skill === 'TRAP' && (!target || !isValidTrapPlacement(s, target.r, target.c))) {
     return { state: s, applied: false };
+  }
+
+  if (skill === 'TELEPORT' && target) {
+    const pl = s.players[s.turn];
+    const dist = Math.abs(pl.r - target.r) + Math.abs(pl.c - target.c);
+    const occ = s.players.some((o, i) => i !== s.turn && o.r === target.r && o.c === target.c);
+    if (dist > 2 || dist === 0 || occ || isTrenchCell(s, target.r, target.c)) {
+      return { state: s, applied: false };
+    }
   }
 
   const ns = cloneS(s);
@@ -383,7 +447,7 @@ export function applySkill(
           const step = Math.sign(dc) * Math.min(2, Math.max(0, Math.abs(dc) - 1));
           if (step !== 0) nc = o.c + step;
         }
-        if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9) continue;
+        if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9 || isTrenchCell(ns, nr, nc)) continue;
         const occupied = ns.players.some((pl, idx) => idx !== i && pl.r === nr && pl.c === nc);
         if (!occupied) {
           o.r = nr;
@@ -550,7 +614,7 @@ export function bfsPath(s: GameState, pi: number) {
     }
     for (const [dr, dc] of ds) {
       const nr = r + dr, nc = c + dc;
-      if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9 || vis.has(nr * 9 + nc) || isBlocked(s, r, c, nr, nc)) continue;
+      if (nr < 0 || nr >= 9 || nc < 0 || nc >= 9 || vis.has(nr * 9 + nc) || isBlocked(s, r, c, nr, nc) || isTrenchCell(s, nr, nc)) continue;
       vis.set(nr * 9 + nc, { r, c });
       q.push({ r: nr, c: nc });
     }
@@ -559,7 +623,14 @@ export function bfsPath(s: GameState, pi: number) {
 }
 
 export function ev(s: GameState) {
-  return (bfsDist(s, 0) - bfsDist(s, 1)) * 10 + (s.players[1].walls - s.players[0].walls) * 2 + (4 - Math.abs(s.players[1].c - 4));
+  let score =
+    (bfsDist(s, 0) - bfsDist(s, 1)) * 10 + (s.players[1].walls - s.players[0].walls) * 2 + (4 - Math.abs(s.players[1].c - 4));
+  if (trenchAwareAi(s)) {
+    const w = 5;
+    score += orthoTrenchNeighborCount(s, s.players[0].r, s.players[0].c) * w;
+    score -= orthoTrenchNeighborCount(s, s.players[1].r, s.players[1].c) * w;
+  }
+  return score;
 }
 
 /** Nehéz AI: stabil távolság (Infinity → clamp), mobilitás, sürgősség ha valaki a cél közelében van. */
@@ -575,7 +646,13 @@ export function evHard(s: GameState): number {
   if (s.players.length === 2) {
     const m0 = getValidMoves(s, 0).length;
     const m1 = getValidMoves(s, 1).length;
-    score += (m1 - m0) * 3;
+    const mobW = trenchAwareAi(s) ? 5 : 3;
+    score += (m1 - m0) * mobW;
+  }
+  if (trenchAwareAi(s)) {
+    const wT = 4;
+    score += orthoTrenchNeighborCount(s, s.players[0].r, s.players[0].c) * wT;
+    score -= orthoTrenchNeighborCount(s, s.players[1].r, s.players[1].c) * wT;
   }
   if (u0 <= 4) score += (5 - u0) * 7;
   if (u1 <= 4) score -= (5 - u1) * 7;
@@ -588,6 +665,7 @@ type EvalFn = (state: GameState) => number;
 function orderedPawnMoves(s: GameState, pi: number): { r: number; c: number }[] {
   const mv = getValidMoves(s, pi);
   if (mv.length <= 1) return mv;
+  const aware = trenchAwareAi(s);
   return [...mv].sort((a, b) => {
     const na = cloneS(s);
     na.players[pi].r = a.r;
@@ -597,7 +675,14 @@ function orderedPawnMoves(s: GameState, pi: number): { r: number; c: number }[] 
     nb.players[pi].r = b.r;
     nb.players[pi].c = b.c;
     consumeActiveMole(nb.players[pi]);
-    return bfsDist(na, pi) - bfsDist(nb, pi);
+    const da = bfsDist(na, pi);
+    const db = bfsDist(nb, pi);
+    if (da !== db) return da - db;
+    if (!aware) return 0;
+    const ma = getValidMoves(na, pi).length;
+    const mb = getValidMoves(nb, pi).length;
+    if (ma !== mb) return mb - ma;
+    return orthoTrenchNeighborCount(s, a.r, a.c) - orthoTrenchNeighborCount(s, b.r, b.c);
   });
 }
 
@@ -714,21 +799,36 @@ export function greedyBotMove(s: GameState, pi: number): AIMove {
 
   const baseSelf = bfsDist(s, pi);
   const baseOppMin = minOppDist(s);
+  const aware = trenchAwareAi(s);
 
-  type Scored = { r: number; c: number; selfD: number; oppMin: number };
+  type Scored = { r: number; c: number; selfD: number; oppMin: number; mob: number; trenchN: number };
   const scored: Scored[] = moves.map(m => {
     const ns = cloneS(s);
     ns.players[pi].r = m.r;
     ns.players[pi].c = m.c;
     consumeActiveMole(ns.players[pi]);
-    return { r: m.r, c: m.c, selfD: bfsDist(ns, pi), oppMin: minOppDist(ns) };
+    return {
+      r: m.r,
+      c: m.c,
+      selfD: bfsDist(ns, pi),
+      oppMin: minOppDist(ns),
+      mob: getValidMoves(ns, pi).length,
+      trenchN: orthoTrenchNeighborCount(s, m.r, m.c),
+    };
   });
+
+  const betterGreedy = (a: Scored, b: Scored): Scored => {
+    if (a.oppMin !== b.oppMin) return a.oppMin >= b.oppMin ? a : b;
+    if (!aware) return a;
+    if (a.mob !== b.mob) return a.mob >= b.mob ? a : b;
+    return a.trenchN <= b.trenchN ? a : b;
+  };
 
   const progressing = scored.filter(x => x.selfD < baseSelf);
   if (progressing.length > 0) {
     const bestSelf = Math.min(...progressing.map(x => x.selfD));
     const tier = progressing.filter(x => x.selfD === bestSelf);
-    const pick = tier.reduce((a, b) => (a.oppMin >= b.oppMin ? a : b));
+    const pick = tier.reduce(betterGreedy);
     return { type: 'move', r: pick.r, c: pick.c };
   }
 
@@ -756,10 +856,16 @@ export function greedyBotMove(s: GameState, pi: number): AIMove {
   // Oldalsó / kitérő: ne essünk szét — tartjuk a távolságot, közben ellenfelet hátráltatjuk ha lehet
   const lateral = scored.filter(x => x.selfD === baseSelf);
   if (lateral.length > 0) {
-    const pick = lateral.reduce((a, b) => (a.oppMin >= b.oppMin ? a : b));
+    const pick = lateral.reduce(betterGreedy);
     if (pick.oppMin > baseOppMin) return { type: 'move', r: pick.r, c: pick.c };
   }
 
-  const retreat = scored.reduce((a, b) => (a.selfD <= b.selfD ? a : b));
+  const retreat = aware
+    ? scored.reduce((a, b) => {
+        if (a.selfD !== b.selfD) return a.selfD <= b.selfD ? a : b;
+        if (a.mob !== b.mob) return a.mob >= b.mob ? a : b;
+        return a.trenchN <= b.trenchN ? a : b;
+      })
+    : scored.reduce((a, b) => (a.selfD <= b.selfD ? a : b));
   return { type: 'move', r: retreat.r, c: retreat.c };
 }

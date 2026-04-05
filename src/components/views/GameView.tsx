@@ -9,7 +9,7 @@ import {
 import { GameState, SkillType, isTeamGameState, maxTreasureInventorySlots } from '../../game/logic';
 import { SkillFxState } from '../SkillFxOverlay';
 import { Profile } from '../../lib/supabase';
-import { GameMode, isAIMode, isOnlineMode, isTreasureMode } from '../../lib/types';
+import { GameMode, isAIMode, isOnlineMode, usesTreasureRules } from '../../lib/types';
 import { QuoridorBoard } from '../QuoridorBoard';
 import { PLAYER_COLORS, PLAYER_LABELS } from './LobbyView';
 import { cn } from '../../lib/utils';
@@ -293,14 +293,14 @@ export function GameView({
           boardViewerIndex={boardViewerIndex}
           trapHitFlash={trapHitFlash}
           skillFx={skillFx}
-          onTreasureDig={isTreasureMode(mode) && isLocalTurn ? onDig : undefined}
+          onTreasureDig={usesTreasureRules(mode) && isLocalTurn ? onDig : undefined}
           treasureDigHighlight={canDigTreasure && onTreasureCell}
           pawnSkinIds={pawnSkinIds}
         />
       </div>
 
       {/* Treasure mode: skills */}
-      {isTreasureMode(mode) && (
+      {usesTreasureRules(mode) && (
         <div className="flex flex-col items-center gap-3 w-full max-w-md mx-auto mt-3">
           {/* Skill rows per player */}
           <div className="flex flex-col gap-2 w-full">

@@ -36,6 +36,7 @@ export const hu = {
     subtitle1v1: '1 vs 1 — Játékmód',
     normal: 'Normal',
     treasure: 'Kincskereső',
+    battlefield: 'Battlefield',
     subtitleAi: '1 vs Gép — Játékmód',
     subtitleMulti: 'Online Multiplayer — Játékmód',
     subtitleDifficulty: 'Nehézségi Fokozat',
@@ -190,6 +191,8 @@ export const hu = {
   lobby: {
     onlineGamesTitle: 'Online Játékok',
     treasureModeSubtitle: 'Kincskereső mód',
+    battlefieldModeSubtitle: 'Battlefield — árok, rejtett csapdák, kevesebb fal',
+    battlefieldBadge: 'Battlefield',
     ownGame: 'Saját játék',
     joined: 'Csatlakozva',
     autoStart: (time: string) => `Auto-start: ${time}`,

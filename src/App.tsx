@@ -23,7 +23,7 @@ import { useEasterEggSpawner } from './components/EasterEggOverlay';
 import { CollectibleType } from './lib/types';
 import { Trophy, User, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
-import { GameMode, View, isOnlineMode, isTreasureMode, isAIMode } from './lib/types';
+import { GameMode, View, isOnlineMode, isAIMode, usesTreasureRules, isBattlefieldMode } from './lib/types';
 import { countFilledOnlineSlots, filterBotSlotsForPlayerCount } from './lib/onlineLobby';
 import { AuthView } from './components/views/AuthView';
 import { MenuView } from './components/views/MenuView';
@@ -364,8 +364,12 @@ export default function App() {
           const myRole = onlineRoleRef.current;
           const myLoadout = skillLoadoutRef.current;
           if (myLoadout.length > 0 && gs.players?.[myRole]) {
+            const inv = (gs.battlefieldMode
+              ? [...myLoadout].filter((sk: SkillType) => sk !== 'TRAP')
+              : [...myLoadout]
+            ).slice(0, 3);
             gs.players = gs.players.map((p: any, i: number) =>
-              i === myRole ? { ...p, inventory: [...myLoadout].slice(0, 3) } : p
+              i === myRole ? { ...p, inventory: inv } : p
             );
           }
           if (typeof g.max_players === 'number' && g.max_players >= 2) setMaxPlayers(g.max_players);
@@ -452,11 +456,12 @@ export default function App() {
       const n = countFilledOnlineSlots(g, lobbyCap, botSlotsRef.current);
       if (n < 2) return;
       const treasure = Boolean(g.state?.treasureMode);
+      const battlefield = Boolean(g.state?.battlefieldMode);
       const loadout =
         skillLoadoutRef.current.length > 0 ? [...skillLoadoutRef.current].slice(0, 3) : undefined;
       const layout = (g.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? onlineTeamLayoutRef.current;
       const teams = teamsForOnlineLayout(layout, n);
-      let newState = initState(treasure, n, loadout, teams);
+      let newState = initState(treasure, n, loadout, teams, { battlefield });
       const bots = filterBotSlotsForPlayerCount(botSlotsRef.current, n);
       if (bots.length > 0) newState = { ...newState, botPlayers: bots };
       setGameState(newState);
@@ -692,7 +697,11 @@ export default function App() {
     setMode(selectedMode);
     // Use current loadout from ref to avoid stale closure
     const currentLoadout = skillLoadoutRef.current;
-    setGameState(initState(isTreasureMode(selectedMode), 2, currentLoadout.length > 0 ? currentLoadout : undefined));
+    setGameState(
+      initState(usesTreasureRules(selectedMode), 2, currentLoadout.length > 0 ? currentLoadout : undefined, undefined, {
+        battlefield: isBattlefieldMode(selectedMode),
+      })
+    );
     setAnimating(false); setTimeLeft(120);
     setView('game');
   }, [onlineGameId]);
@@ -775,7 +784,7 @@ export default function App() {
       const SKILLS: SkillType[] = ['TELEPORT', 'HAMMER', 'SKIP', 'MOLE', 'DYNAMITE', 'SHIELD', 'WALLS', 'MAGNET', 'TRAP', 'SWAP'];
       if (!p.inventory) p.inventory = [];
       const have = new Set(p.inventory);
-      const pool = SKILLS.filter(s => !have.has(s));
+      const pool = SKILLS.filter(s => !have.has(s) && !(next.battlefieldMode && s === 'TRAP'));
       const found = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : undefined;
       if (found && p.inventory.length < innerCap) {
         next.treasures!.splice(tIdx, 1);
@@ -860,7 +869,7 @@ export default function App() {
     setGameState(next);
     if (isWin) setTimeout(() => handleWinRef.current(winnerIdx, false, '', next), 400);
 
-    if (isTreasureMode(modeRef.current)) {
+    if (usesTreasureRules(modeRef.current)) {
       const uid = sessionRef.current?.user?.id ?? null;
       const prof = profileRef.current;
       const owned = prof.owned_skills ?? getLocalOwnedSkills();
@@ -884,7 +893,16 @@ export default function App() {
     setAuthLoading(true);
     // Cancel any stale waiting games before creating a new one
     await cancelMyWaitingGames(session.user.id);
-    const state: GameState = { ...initState(mode === 'treasure-online', maxPlayers), pendingTeamLayout: 'ffa' };
+    const state: GameState = {
+      ...initState(
+        mode === 'treasure-online' || mode === 'battlefield-online',
+        maxPlayers,
+        undefined,
+        undefined,
+        { battlefield: mode === 'battlefield-online' }
+      ),
+      pendingTeamLayout: 'ffa',
+    };
     const { data, error } = await createGame(session.user.id, state, maxPlayers);
     setAuthLoading(false);
     if (data) {
@@ -918,12 +936,13 @@ export default function App() {
     const lobbyCap = Math.min(4, Math.max(2, g?.max_players ?? maxPlayers));
     const n = countFilledOnlineSlots(g, lobbyCap, botSlots);
     if (n < 2) return;
-    const treasure = Boolean(g?.state?.treasureMode ?? mode === 'treasure-online');
+    const treasure = Boolean(g?.state?.treasureMode ?? usesTreasureRules(mode));
+    const battlefield = Boolean(g?.state?.battlefieldMode ?? mode === 'battlefield-online');
     const loadout =
       skillLoadoutRef.current.length > 0 ? [...skillLoadoutRef.current].slice(0, 3) : undefined;
     const layout = (g?.state?.pendingTeamLayout as OnlineTeamLayoutId) ?? onlineTeamLayout;
     const teams = teamsForOnlineLayout(layout, n);
-    let newState = initState(treasure, n, loadout, teams);
+    let newState = initState(treasure, n, loadout, teams, { battlefield });
     const bots = filterBotSlotsForPlayerCount(botSlots, n);
     if (bots.length > 0) newState = { ...newState, botPlayers: bots };
     setGameState(newState);
@@ -956,7 +975,9 @@ export default function App() {
       : game.player2_id === session.user.id ? 1
       : game.player3_id === session.user.id ? 2
       : 3;
-    setMode(game.state?.treasureMode ? 'treasure-online' : 'online');
+    setMode(
+      game.state?.battlefieldMode ? 'battlefield-online' : game.state?.treasureMode ? 'treasure-online' : 'online'
+    );
     setOnlineGameId(game.id);
     setOnlineRole(myRole);
     setGameState(game.state);
@@ -1153,7 +1174,7 @@ export default function App() {
                 {winReason && <p className="text-red-400 font-bold mb-2 uppercase tracking-wider">{winReason}</p>}
                 <p className="text-[#a89078] mb-8">
                   {isAIMode(mode) && (winnerIdx === 0 ? hu.app.xpWinAi : hu.app.xpLoseAi)}
-                  {(mode === 'pvp' || mode === 'treasure-pvp') && hu.app.xpLocal}
+                  {(mode === 'pvp' || mode === 'treasure-pvp' || mode === 'battlefield-pvp') && hu.app.xpLocal}
                   {isOnlineMode(mode) && (iWonOnline ? hu.app.xpWinOnline : hu.app.xpLoseOnline)}
                 </p>
                 <div className="flex flex-col gap-3">

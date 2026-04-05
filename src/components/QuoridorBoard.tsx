@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Crosshair } from 'lucide-react';
 import {
   GameState, v2w, getValidMoves, isValidWall, Wall, SkillType, isValidTrapPlacement, viewerSeesTrapMarker,
-  wallFromGapVisual, isGapBetweenPlayerAndValidMove,
+  wallFromGapVisual, isGapBetweenPlayerAndValidMove, isTrenchCell,
 } from '../game/logic';
 import { cn } from '../lib/utils';
 import { PLAYER_COLORS } from './views/LobbyView';
@@ -290,7 +290,7 @@ export function QuoridorBoard({
         const p = state.players[state.turn];
         const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
         const noPawnHere = !state.players.some((pl, idx) => idx !== state.turn && pl.r === r && pl.c === c);
-        if (dist <= 2 && dist > 0 && noPawnHere) {
+        if (dist <= 2 && dist > 0 && noPawnHere && !isTrenchCell(state, r, c)) {
           onSkillTarget(r, c);
         }
       }
@@ -343,13 +343,15 @@ export function QuoridorBoard({
             const p = state.players[state.turn];
             const dist = Math.abs(p.r - r) + Math.abs(p.c - c);
             const noPawnHere = !state.players.some((pl, idx) => idx !== state.turn && pl.r === r && pl.c === c);
-            if (dist <= 2 && dist > 0 && noPawnHere) isTeleportTarget = true;
+            if (dist <= 2 && dist > 0 && noPawnHere && !isTrenchCell(state, r, c)) isTeleportTarget = true;
           }
 
           let isTrapTarget = false;
-          if (targetingSkill === 'TRAP' && state.treasureMode && isValidTrapPlacement(state, r, c)) {
+          if (targetingSkill === 'TRAP' && state.treasureMode && isValidTrapPlacement(state, r, c) && !isTrenchCell(state, r, c)) {
             isTrapTarget = true;
           }
+
+          const isTrench = isTrenchCell(state, r, c);
 
           const hasTreasure = state.treasureMode && state.treasures?.some(t => t.r === r && t.c === c);
           const isOwnTreasureDig =
@@ -376,15 +378,19 @@ export function QuoridorBoard({
               title={isOwnTreasureDig ? hu.game.digTapOwnCellHint : undefined}
               className={cn(
                 cellCls,
-                "touch-manipulation select-none [-webkit-tap-highlight-color:transparent] bg-[#c4956a] rounded-sm relative transition-colors duration-200 flex items-center justify-center active:brightness-95",
-                r === 8 && "shadow-[inset_0_-3px_0_#e74c3c]",
-                r === 0 && "shadow-[inset_0_3px_0_#2c3e50]",
-                c === 8 && "shadow-[inset_-3px_0_0_#27ae60]",
-                c === 0 && "shadow-[inset_3px_0_0_#8e44ad]",
+                "touch-manipulation select-none [-webkit-tap-highlight-color:transparent] rounded-sm relative transition-colors duration-200 flex items-center justify-center active:brightness-95",
+                isTrench
+                  ? "bg-[#1a120c] ring-1 ring-inset ring-black/40 shadow-[inset_0_2px_8px_rgba(0,0,0,0.55)] cursor-default pointer-events-auto"
+                  : "bg-[#c4956a]",
+                r === 8 && !isTrench && "shadow-[inset_0_-3px_0_#e74c3c]",
+                r === 0 && !isTrench && "shadow-[inset_0_3px_0_#2c3e50]",
+                c === 8 && !isTrench && "shadow-[inset_-3px_0_0_#27ae60]",
+                c === 0 && !isTrench && "shadow-[inset_3px_0_0_#8e44ad]",
                 isValidMove && !wallMode ? "relative z-[8] bg-[rgba(76,175,80,0.4)] cursor-pointer" :
                 isOwnTreasureDig ? "bg-[rgba(232,184,48,0.35)] cursor-pointer ring-2 ring-[#e8b830]/90 ring-offset-1 ring-offset-[#2a1810] shadow-[0_0_14px_rgba(232,184,48,0.45)]" :
                 isTrapTarget ? "bg-[rgba(251,146,60,0.45)] cursor-pointer shadow-[0_0_12px_rgba(251,146,60,0.55)]" :
-                isTeleportTarget ? "bg-[rgba(232,184,48,0.4)] cursor-pointer shadow-[0_0_10px_rgba(232,184,48,0.6)]" : "hover:bg-[#d4a87a] cursor-pointer"
+                isTeleportTarget ? "bg-[rgba(232,184,48,0.4)] cursor-pointer shadow-[0_0_10px_rgba(232,184,48,0.6)]" :
+                !isTrench ? "hover:bg-[#d4a87a] cursor-pointer" : ""
               )}
               style={{ gridRow: vr + 1, gridColumn: vc + 1 }}
               onClick={() => handleCellClick(r, c)}

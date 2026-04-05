@@ -1,7 +1,7 @@
 # Quoridor Falsakk — A Stratégia Játéka
 
 A Quoridor board game web-alapú implementációja React + Supabase stack-kel.
-Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI botok, kincskeresős skill-rendszer, és Easter egg Gamepass áruház.
+Magyar nyelvű felület, **9 játékmód** (klasszikus / kincs / Battlefield × helyi, gép, online), 2–4 játékos online multiplayer, AI botok, kincskeresős skill-rendszer, **Battlefield** (árokmezők + módosított faljuttatás), és Easter egg Gamepass áruház.
 
 **Live:** https://quoridor-snowy.vercel.app
 
@@ -13,10 +13,13 @@ Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI b
 |-----|--------|-----|
 | **1 vs 1 — Normal** | Helyi kétjátékos | +20 XP |
 | **1 vs 1 — Kincskereső** | Helyi kétjátékos, kincsekkel és skillekkel | +20 XP |
+| **1 vs 1 — Battlefield** | Kincs + skillek + **árokmezők** (I/L/T), kevesebb fal (5/fő 2 játékosnál) | +20 XP |
 | **1 vs Gép — Normal** | AI: Könnyű (2 mélység), Közepes (4 + erős heurisztika, fal-szűrés), Nehéz (5 + szűkebb fal-szűrés) | +50 győzelem / +10 vereség |
 | **1 vs Gép — Kincskereső** | AI + treasure mode | +50 / +10 |
+| **1 vs Gép — Battlefield** | AI + árok + kincs; ároknál mobilitás- és heurisztika-finomhangolás | +50 / +10 |
 | **Online — Normal** | Valós idejű 2–4 játékos multiplayer | +50 / +10 |
 | **Online — Kincskereső** | Online + treasure mode | +50 / +10 |
+| **Online — Battlefield** | Külön lobby lista; állapot: `treasureMode` + `battlefieldMode` + `trenches` | +50 / +10 |
 
 ---
 
@@ -29,6 +32,7 @@ Magyar nyelvű felület, 6 játékmód, 2–4 játékos online multiplayer, AI b
 - **Heartbeat rendszer** — 30 másodpercenként életjelet küld; inaktív játékok 2 perc után automatikusan lezáródnak
 - **Játékon belüli maradás** — új online meccs nem indítható, amíg egy másikban benne vagy
 - **Online csapatbeosztás (3–4 játékos)** — a host a lobbyban választhat szabad játékot (FFA) vagy fix csapatelrendezést (pl. három játékosnál 1v2 / 2v1, négy játékosnál 2v2); a győzelem képernyő csapat szerint értelmezi a nyerést
+- **Battlefield online** — a várakozó meccsek **Normal / Kincskereső / Battlefield** szerint szétválasztva jelennek meg; a játék JSON állapotában `battlefieldMode` és `trenches` tárolódik
 
 ---
 
@@ -68,7 +72,8 @@ Részletes séma és megjegyzések: `supabase-schema.sql`.
 src/
   App.tsx                    # Fő állapotkezelés és routing
   game/
-    logic.ts                 # Játéklogika: BFS, Minimax, skill rendszer, 4 játékos
+    logic.ts                 # Játéklogika: BFS, Minimax, skill rendszer, 4 játékos, árok / Battlefield
+    battlefield.ts           # Tetrominó árok generálás (Battlefield)
   components/
     QuoridorBoard.tsx        # Játéktábla UI (17×17 grid, skálázható cellaméret)
     ThreeBackground.tsx      # Three.js 3D háttér
@@ -288,10 +293,11 @@ Az `award-xp` Edge Function server-side XP validációt végez — megakadályoz
 - 9×9-es tábla, 2–4 játékos
 - **P1** (piros): sor 0 → sor 8 · **P2** (sötétkék): sor 8 → sor 0
 - **P3** (zöld): oszlop 0 → oszlop 8 · **P4** (lila): oszlop 8 → oszlop 0
-- Falak kezdeti száma: 10 (2 jt.) / 7 (3 jt.) / 5 (4 jt.)
+- Falak kezdeti száma: **10** (2 jt.) / **7** (3 jt.) / **5** (4 jt.) — klasszikus és Kincskereső
+- **Battlefield:** falak **5** (2 jt.) / **4** (3 jt.) / **3** (4 jt.); **árokmezők** nem járhatók; kincs nem esik árokra; ásás nem ad **TRAP** skillt; csapdánál Battlefield alatt csak a lerakó látja a jelölőt
 - Fal lerakása után mindenkinek kell elérési útvonalnak lennie (BFS validáció)
-- Ugrás lehetséges, ha az ellenfél szomszédos és mögötte szabad
-- **Kincskereső módban**: `játékosszám × 2` kincs; kiásással skilleket lehet szerezni (max 2 db)
+- Ugrás lehetséges, ha az ellenfél szomszédos és mögötte szabad (cél nem lehet árok)
+- **Kincskereső / Battlefield**: `játékosszám × 2` kincs; kiásással skilleket lehet szerezni (szint szerinti plafon; Battlefield: TRAP nem jöhet ki a kincsből)
 
 ### Skill lista
 
@@ -299,15 +305,15 @@ Minden skill egy 56×56 px-es ikon gombként jelenik meg, játékos-specifikus a
 
 | Skill | Ikon | Szín | Leírás |
 |-------|------|------|--------|
-| TELEPORT | ⚡ Zap | lila | Ugrás legfeljebb 2 cellára (célpont kijelölése) |
+| TELEPORT | ⚡ Zap | lila | Ugrás legfeljebb 2 cellára (célpont kijelölése); árokra nem |
 | HAMMER | 🔨 Hammer | narancs | Egy fal lerombolása (célpont kijelölése) |
 | SKIP | ⏭ SkipForward | kék | Ellenfél következő körét kihagyja |
 | MOLE | ⛏ Pickaxe | lime | Következő körben átsétálhatsz falakon |
 | DYNAMITE | 🔥 Flame | piros | Egy metszésponthoz csatlakozó összes fal robbantása (célpont) |
 | SHIELD | 🛡 Shield | cián | 2 körre blokkolja a vízszintes falakat előtted |
 | WALLS | ➕ Plus | arany | Azonnal kapsz 2 extra falat |
-| MAGNET | 🧲 Magnet | rózsaszín | Ellenfelet 2 cellával közelebb húzza |
-| TRAP | 🎯 Crosshair | narancs | Üres mezőre helyezett csapda (ellenfélnek rejtett); belépéskor aktiválódik, visszadobja starthoz |
+| MAGNET | 🧲 Magnet | rózsaszín | Ellenfeleket húzza; cél nem lehet foglalt vagy árok |
+| TRAP | 🎯 Crosshair | narancs | Üres, nem árok mező; Battlefield: csak a lerakó látja a jelölőt; belépéskor start |
 | SWAP | ↔ ArrowLeftRight | zöld | Pozíció csere az ellenféllel |
 
 ---

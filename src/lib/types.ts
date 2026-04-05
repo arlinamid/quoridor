@@ -1,9 +1,22 @@
-export type GameMode = 'pvp' | 'ai' | 'online' | 'treasure-pvp' | 'treasure-ai' | 'treasure-online';
+export type GameMode =
+  | 'pvp'
+  | 'ai'
+  | 'online'
+  | 'treasure-pvp'
+  | 'treasure-ai'
+  | 'treasure-online'
+  | 'battlefield-pvp'
+  | 'battlefield-ai'
+  | 'battlefield-online';
+
 export type View = 'auth' | 'menu' | 'game' | 'leaderboard' | 'tos' | 'privacy' | 'lobby' | 'rules' | 'store';
 
-export const isOnlineMode = (m: GameMode): boolean => m === 'online' || m === 'treasure-online';
+export const isOnlineMode = (m: GameMode): boolean => m === 'online' || m === 'treasure-online' || m === 'battlefield-online';
 export const isTreasureMode = (m: GameMode): boolean => m.startsWith('treasure');
-export const isAIMode = (m: GameMode): boolean => m === 'ai' || m === 'treasure-ai';
+export const isBattlefieldMode = (m: GameMode): boolean => m.startsWith('battlefield');
+/** Kincs, ásás, skillek a táblán — klasszikus kincs + Battlefield. */
+export const usesTreasureRules = (m: GameMode): boolean => isTreasureMode(m) || isBattlefieldMode(m);
+export const isAIMode = (m: GameMode): boolean => m === 'ai' || m === 'treasure-ai' || m === 'battlefield-ai';
 
 export type CollectibleType = 'EGG_BASIC' | 'EGG_GOLD' | 'EGG_RAINBOW';
 

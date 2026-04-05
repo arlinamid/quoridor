@@ -3,7 +3,7 @@ import {
   hasWon, initState, v2w, isBlocked, applySkill, getValidMoves, advanceTurn, consumeActiveMole,
   teamsForOnlineLayout, viewerSharesWin, cloneS, isValidTrapPlacement, trapAffectsVictim, viewerSeesTrapMarker,
   evHard, mmRoot, opponentIndices, getWallCandidatesNearPath, greedyBotMove,
-  gapAdjacentCells, wallFromGapVisual, isGapBetweenPlayerAndValidMove,
+  gapAdjacentCells, wallFromGapVisual, isGapBetweenPlayerAndValidMove, orthoTrenchNeighborCount,
   type GameState,
 } from './logic';
 
@@ -89,6 +89,76 @@ describe('initState', () => {
     const s = initState(true, 4);
     expect(s.players[2]).toMatchObject({ r: 4, c: 0, goalCol: 8 });
     expect(s.players[3]).toMatchObject({ r: 4, c: 8, goalCol: 0 });
+  });
+
+  it('battlefield: treasure rules, trenches, 2p walls 5, 4p walls 3', () => {
+    const s2 = initState(false, 2, undefined, undefined, { battlefield: true });
+    expect(s2.treasureMode).toBe(true);
+    expect(s2.battlefieldMode).toBe(true);
+    expect(s2.players[0].walls).toBe(5);
+    expect((s2.trenches?.length ?? 0)).toBeGreaterThan(0);
+
+    const s4 = initState(false, 4, undefined, undefined, { battlefield: true });
+    expect(s4.players[0].walls).toBe(3);
+  });
+
+  it('battlefield: treasures never on trench cells', () => {
+    for (let i = 0; i < 15; i++) {
+      const s = initState(false, 2, undefined, undefined, { battlefield: true });
+      const keys = new Set((s.trenches ?? []).map(t => `${t.r},${t.c}`));
+      for (const tr of s.treasures ?? []) {
+        expect(keys.has(`${tr.r},${tr.c}`)).toBe(false);
+      }
+    }
+  });
+
+  it('battlefield: P0 loadout has no TRAP', () => {
+    const s = initState(false, 2, ['TRAP', 'TELEPORT', 'HAMMER'], undefined, { battlefield: true });
+    expect(s.players[0].inventory).not.toContain('TRAP');
+    expect(s.players[0].inventory).toContain('TELEPORT');
+  });
+});
+
+describe('orthoTrenchNeighborCount', () => {
+  it('counts only in-bounds orthogonal trench cells', () => {
+    const s = initState(false, 2);
+    s.trenches = [{ r: 4, c: 4 }, { r: 4, c: 5 }];
+    expect(orthoTrenchNeighborCount(s, 4, 3)).toBe(1);
+    expect(orthoTrenchNeighborCount(s, 3, 4)).toBe(1);
+    expect(orthoTrenchNeighborCount(s, 5, 4)).toBe(1);
+    expect(orthoTrenchNeighborCount(s, 4, 6)).toBe(1);
+    expect(orthoTrenchNeighborCount(s, 0, 0)).toBe(0);
+  });
+});
+
+describe('battlefield trenches & skills', () => {
+  it('cannot move onto a trench', () => {
+    const s = initState(false, 2);
+    s.trenches = [{ r: 5, c: 5 }];
+    s.players[0] = { ...s.players[0], r: 4, c: 5 };
+    s.turn = 0;
+    const moves = getValidMoves(s, 0);
+    expect(moves.some(m => m.r === 5 && m.c === 5)).toBe(false);
+  });
+
+  it('TELEPORT cannot target trench', () => {
+    const s = initState(false, 2);
+    s.trenches = [{ r: 5, c: 5 }];
+    s.players[0] = { ...s.players[0], r: 5, c: 4, inventory: ['TELEPORT'] };
+    s.turn = 0;
+    const res = applySkill(s, 'TELEPORT', { r: 5, c: 5 });
+    expect(res.applied).toBe(false);
+  });
+
+  it('battlefield: trap marker visible only to owner', () => {
+    const s0 = initState(true, 2);
+    s0.battlefieldMode = true;
+    s0.players[0].inventory = ['TRAP'];
+    s0.turn = 0;
+    const placed = applySkill(s0, 'TRAP', { r: 3, c: 3 });
+    expect(placed.applied !== false && (placed.state.traps?.length ?? 0) > 0).toBe(true);
+    expect(viewerSeesTrapMarker(placed.state, 0, 0)).toBe(true);
+    expect(viewerSeesTrapMarker(placed.state, 1, 0)).toBe(false);
   });
 });
 
