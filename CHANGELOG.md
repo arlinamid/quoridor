@@ -86,6 +86,7 @@ All notable changes to Quoridor Falsakk are documented here.
 ### Fixed
 - **Online csapatmód + bot győzelem** — befejezéskor a `winner_id` eddig gyakran a **vezérlő kliens** (`session.user.id`, pl. host) UUID-je volt, nem a győztes bábu slotjáé; a másik kliens rossz `winSlot`-ot számolt, ezért pl. **„A másik csapat győzött”** jelent meg a csapattársnak, ha a **bot** ért célba. Most: **`dbWinnerUserIdForSlot`** — emberi győztesre slot UUID, botra **`null`**; Realtime **`finished`** esetén, ha nincs egyező `winner_id`, **`hasWon`** a szinkron **`state`**-ből adja a győztes indexet.
 - **Battlefield XP jóváírás** — a `award_match_xp` RPC eddig `invalid_mode` hibát dobott `battlefield-*` módokra, így nem frissült megbízhatóan az XP / win / loss. A módlista most tartalmazza a `battlefield-online`, `battlefield-ai`, `battlefield-pvp` értékeket (RPC + Edge Function paritás).
+- **Dupla XP jóváírás meccsvégén** — ugyanarra a győzelemre a lokális lezárás és a Realtime `finished` esemény is meghívhatta a `handleWin` ágat, ezért bizonyos esetekben kétszer futott az `awardXp`. `App.tsx` most `winHandledRef` guarddal egyszeri meccsvégi elszámolást biztosít, és új parti előtt reseteli.
 
 ### Tests
 - **`dbWinnerUserIdForSlot`** (`onlineLobby.test.ts`).

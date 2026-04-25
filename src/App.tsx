@@ -92,6 +92,8 @@ export default function App() {
   const botSlotsRef = useRef(botSlots);
   const skillLoadoutRef = useRef(skillLoadout);
   const profileRef = useRef(profile);
+  /** Guard: ugyanarra a meccsvégre csak egyszer fusson le a handleWin (XP duplázás ellen). */
+  const winHandledRef = useRef(false);
   // handleWinRef populated after handleWin is defined (see below)
   const handleWinRef = useRef<(idx: number, fromRt?: boolean, reason?: string, snap?: GameState) => void>(() => {});
   /** Online skill FX broadcast: monoton növekvő seq (duplikált Realtime események kiszűrése). */
@@ -118,6 +120,9 @@ export default function App() {
   useEffect(() => { skillLoadoutRef.current = skillLoadout; }, [skillLoadout]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
   useEffect(() => { onlineTeamLayoutRef.current = onlineTeamLayout; }, [onlineTeamLayout]);
+  useEffect(() => {
+    if (!showWin) winHandledRef.current = false;
+  }, [showWin]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) { setAuthLoading(false); setView('menu'); return; }
@@ -305,6 +310,8 @@ export default function App() {
   };
 
   const handleWin = useCallback((winnerIndex: number, _fromRealtime = false, reason = '', snapState?: GameState) => {
+    if (winHandledRef.current) return;
+    winHandledRef.current = true;
     setShowWin(true);
     setWinnerIdx(winnerIndex);
     setGameState(prev => ({ ...prev, gameOver: true }));
