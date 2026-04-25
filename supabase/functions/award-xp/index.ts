@@ -40,9 +40,9 @@ Deno.serve(async (req) => {
     let winDelta = 0;
     let lossDelta = 0;
 
-    const isOnline = mode === 'online' || mode === 'treasure-online';
-    const isAI = mode === 'ai' || mode === 'treasure-ai';
-    const isPvP = mode === 'pvp' || mode === 'treasure-pvp';
+    const isOnline = mode === 'online' || mode === 'treasure-online' || mode === 'battlefield-online';
+    const isAI = mode === 'ai' || mode === 'treasure-ai' || mode === 'battlefield-ai';
+    const isPvP = mode === 'pvp' || mode === 'treasure-pvp' || mode === 'battlefield-pvp';
 
     if (isAI || isOnline) {
       if (won) { xpDelta = 50; winDelta = 1; }

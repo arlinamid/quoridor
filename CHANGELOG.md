@@ -85,12 +85,14 @@ All notable changes to Quoridor Falsakk are documented here.
 
 ### Fixed
 - **Online csapatmód + bot győzelem** — befejezéskor a `winner_id` eddig gyakran a **vezérlő kliens** (`session.user.id`, pl. host) UUID-je volt, nem a győztes bábu slotjáé; a másik kliens rossz `winSlot`-ot számolt, ezért pl. **„A másik csapat győzött”** jelent meg a csapattársnak, ha a **bot** ért célba. Most: **`dbWinnerUserIdForSlot`** — emberi győztesre slot UUID, botra **`null`**; Realtime **`finished`** esetén, ha nincs egyező `winner_id`, **`hasWon`** a szinkron **`state`**-ből adja a győztes indexet.
+- **Battlefield XP jóváírás** — a `award_match_xp` RPC eddig `invalid_mode` hibát dobott `battlefield-*` módokra, így nem frissült megbízhatóan az XP / win / loss. A módlista most tartalmazza a `battlefield-online`, `battlefield-ai`, `battlefield-pvp` értékeket (RPC + Edge Function paritás).
 
 ### Tests
 - **`dbWinnerUserIdForSlot`** (`onlineLobby.test.ts`).
 
 ### Ops
 - **Éles DB** — migráció feltöltve: `npx supabase db push --linked --yes` (2026-04-05).
+- **Éles DB** — Battlefield XP módok migrációja feltöltve: `20260425174646_award_xp_battlefield_modes.sql` (2026-04-25).
 
 ---
 
