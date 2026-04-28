@@ -2,7 +2,15 @@
 
 All notable changes to Quoridor Falsakk are documented here.
 
-**Éles:** **0.6.5** (2026-04-05) — Vercel + Supabase. Korábbi kiadás: **0.6.4** (2026-04-05).
+**Éles:** **0.6.6** (2026-04-28) — Vercel + Supabase. Korábbi kiadás: **0.6.5** (2026-04-05).
+
+---
+
+## [0.6.6] — 2026-04-28
+
+### Added
+- **Böngésző plugin iframe támogatás** — `document.requestStorageAccess()` hívás `bootstrap()` előtt (`main.tsx`), hogy `allow="storage-access"` attributumú harmadik fél iframe-ből (pl. Chrome/Firefox extension) a `localStorage` és Supabase session sütik elérhetők legyenek.
+- **`Content-Security-Policy: frame-ancestors *`** Vercel header (`vercel.json`) — explicit engedélyezi a játék beágyazását `chrome-extension://` és `moz-extension://` originekből.
 
 ---
 
